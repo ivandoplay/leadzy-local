@@ -66,7 +66,7 @@ cd tests
 > estiver testando. Os 159 testes unitários rodam sem ela; só os end-to-end
 > precisam dela.
 
-Resultado atual: **13 blocos, 299 testes, 0 falhas**, ~15 minutos.
+Resultado atual: **13 blocos, 301 testes, 0 falhas**, ~15 minutos.
 
 | Bloco | Testes | O que cobre |
 |---|---|---|

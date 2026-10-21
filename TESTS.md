@@ -46,7 +46,7 @@ node --test --test-concurrency=1 e2e/campanhas.test.js   # um arquivo e2e
 |---|---:|---|
 | `extension.test.js` | 16 | extensão carrega com service worker, popup sem login, rotas `/dashboard /messages /scripts /triggers /flows`, criar mensagem/script/gatilho pela interface e sobreviver ao reload, `/convert` no navegador, tema escuro, zero tráfego para a Leadzy |
 | `campanhas.test.js` | 17 | disparo completo contra um WhatsApp falso (mesmo barramento do wapi): contagem da lista, 3 modos, proteções, homoglifos/invisíveis no envio, falha registrada, mídia por pasta, pausar/retomar, remover pendente, item no menu, intervalo preciso, pausa após N falhas, QR Code bloqueia início, limite diário, gravação em lote |
-| `achados.test.js` | 27 | **regressão dos 13 achados da auditoria** + consistência visual (cabeçalho, rodapé, paleta) — mapa na seção 2 |
+| `achados.test.js` | 29 | **regressão dos 13 achados da auditoria** + consistência visual (cabeçalho, rodapé, paleta) — mapa na seção 2 |
 | `nono-digito.test.js` | 6 | celular com e sem o nono dígito: uma tentativa quando funciona, segunda tentativa **só** em falha confirmada, sem repetir em ambíguo, sem laço quando as duas falham, fixo não ganha 9 inventado |
 | `integridade.test.js` | 12 | campanha "executando" volta como interrompida, aviso na tela, ambíguo não reenviado sozinho, clique duplo em Iniciar gera uma execução, lista travada durante envio, resultado no contato certo, erro de gravação visível, CSV com cabeçalho, cancelar para as partes seguintes, dataURL liberado da memória |
 | `primeiros-passos.test.js` | 9 | popup sem propaganda e com atalhos que funcionam; cartão "Primeiros passos" só marca etapa comprovada (campanha com conteúdo, WhatsApp realmente conectado) |
@@ -59,7 +59,7 @@ node --test --test-concurrency=1 e2e/campanhas.test.js   # um arquivo e2e
 | `backup.test.js` | 3 | exportar `.lzb` pela interface, ZIP válido com a mensagem dentro, restaurar em perfil limpo |
 | `differential.test.js` | 3 | original cai no login; original com token manual funciona; patch com a mesma interface e zero requisições à Leadzy |
 
-**Total esperado: 299 testes** (159 unitários + 140 end-to-end).
+**Total esperado: 301 testes** (159 unitários + 142 end-to-end).
 O número final só vale o que o `run-all.sh` imprimir.
 
 ---
@@ -79,7 +79,7 @@ O número final só vale o que o `run-all.sh` imprimir.
 | 9 — estimativa por contato e partes | `achados`: 2 |
 | 10 — indicador de salvamento | `achados`: 2 + `integridade`: 2 |
 | 11 — estado vazio e coluna de ações | `achados`: 2 |
-| 12 — HTML/ARIA/foco/idioma/hierarquia | `achados`: 5 + 1 de consistência visual |
+| 12 — HTML/ARIA/foco/idioma/hierarquia | `achados`: 5 + 1 de consistência visual + 2 de tema escuro e contraste |
 | 13 — nomenclatura das travas | `achados`: 1 |
 
 ---

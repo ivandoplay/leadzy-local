@@ -10,7 +10,7 @@ comandos estão citados.
 
 - Versão auditada: `extensao/` no estado anterior a esta rodada (commit `5bbcd3c`).
 - Correções: **não commitadas** no momento em que escrevi isto (commit feito no final).
-- Suíte completa depois das correções: **299 testes, todos passando**
+- Suíte completa depois das correções: **301 testes, todos passando**
   (`bash tests/run-all.sh`, log em `/tmp/full3.log`).
 
 ---
@@ -259,7 +259,7 @@ dependência nova.
 
 ## D. Testes executados
 
-Comando: `bash tests/run-all.sh` (12 blocos, 14 invocações do runner).
+Comando: `bash tests/run-all.sh` (13 blocos, 14 invocações do runner).
 
 | Bloco | Testes | Resultado |
 |---|---|---|
@@ -273,10 +273,10 @@ Comando: `bash tests/run-all.sh` (12 blocos, 14 invocações do runner).
 | 8 Nenhum tráfego externo | 11 | 11 ✅ |
 | 9 Service worker + DNS derrubado | 7 | 7 ✅ |
 | 10 Jornada de instalação | 9 | 9 ✅ |
-| 11 **Achados da auditoria** | 27 | 27 ✅ |
+| 11 **Achados da auditoria** | 29 | 29 ✅ |
 | 12 **Nono dígito** | 6 | 6 ✅ |
 | 13 Integridade do estado | 12 | 12 ✅ |
-| **Total** | **299** | **299 ✅ / 0 ❌** |
+| **Total** | **301** | **301 ✅ / 0 ❌** |
 
 `RESULTADO: TUDO PASSOU`.
 
@@ -336,6 +336,28 @@ Provado por teste (`ACHADO 12: a página usa o mesmo cabeçalho, rodapé e palet
 das outras telas`), que confere a lista de links do menu, o item marcado como
 atual, a presença do rodapé, a cor calculada do botão principal
 (`rgb(237, 3, 115)`), o fundo (`rgb(255, 255, 255)`) e a fonte.
+
+### Terceira rodada: tema escuro e contraste
+
+O app inteiro tem tema escuro (`isDarkMode`, escolhido no menu do usuário), e a
+página de disparo era a única que **ignorava** a preferência: abria branca para
+quem usa o app no escuro. Corrigido com `js/campaigns-theme.js` (aditivo, 60
+linhas): lê `isDarkMode`, aplica `class="dark"` no `<html>` antes do CSS pintar,
+e escuta `chrome.storage.onChanged` para acompanhar a troca sem recarregar.
+
+As cores escuras usam os **mesmos valores de `css/options.css`**
+(`--color-neutral-main: #191a1c`, `--color-surface-raised`, etc.), então as duas
+telas não divergem de paleta.
+
+Também apareceu um problema de contraste que existia desde antes: branco sobre
+o rosa `#ed0373` dá **4,32:1**, abaixo do mínimo 4,5:1 do WCAG AA. O botão
+principal do disparo passou a usar `#dc0060` (**4,99:1**); no tema escuro, texto
+escuro sobre rosa claro (**4,59:1**).
+
+Provado por dois testes novos: *a página segue o tema escuro escolhido no app*
+(inclui persistência após reload) e *texto e controles passam no contraste
+mínimo AA nos dois temas* — este último calcula a razão de contraste de
+verdade, par a par, em vez de conferir se existe uma regra de CSS.
 
 **Limite honesto:** não houve validação com leitor de tela real (NVDA, VoiceOver)
 nem teste com usuários. O que está provado é a presença dos atributos e da

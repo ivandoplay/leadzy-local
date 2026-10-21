@@ -166,7 +166,7 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 
 ## 5. Suíte de testes
 
-**299 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~15 min)
+**301 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~15 min)
 
 | Camada | Testes |
 |---|---|
@@ -185,7 +185,7 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 | **Achados da auditoria** (fila travada, tabela incremental, onboarding comprovado, mídia, ARIA) | **27** |
 | **Nono dígito** (com 9 e sem 9, nova tentativa só em falha confirmada) | **6** |
 | Integridade do estado | 12 |
-| **Total** | **299** |
+| **Total** | **301** |
 
 Os detalhes de cada achado, incluindo o antes × depois da tabela, estão em
 `AUDITORIA-PROMPT.md`. O inventário completo dos testes está em `TESTS.md`.

@@ -410,8 +410,11 @@ main { padding: 22px 24px 96px; max-width: 1400px; margin: 0 auto; }
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.btn-primario { background: var(--primaria); color: #fff; }
-.btn-primario:hover:not(:disabled) { background: var(--primaria-escura); }
+/* pink-700 em vez de pink-600: o branco sobre #ed0373 dá 4,32:1, abaixo do
+   mínimo 4,5:1 do WCAG AA. Sobre #dc0060 dá 4,99:1 e continua sendo a cor da
+   marca. (O resto do app ainda usa pink-600 nos botões.) */
+.btn-primario { background: var(--primaria-escura); color: #fff; }
+.btn-primario:hover:not(:disabled) { background: #b5004e; }
 
 .btn-sec { background: #fff; border-color: var(--borda); color: var(--texto); }
 .btn-sec:hover:not(:disabled) { background: #f7f7f7; }
@@ -921,3 +924,160 @@ tbody tr:last-child td { border-bottom: 0; }
     min-width: 560px;
   }
 }
+
+/* ==========================================================================
+ * TEMA ESCURO
+ * Mesmos valores de --color-* do dark de css/options.css, para as duas telas
+ * não divergirem. A classe é aplicada por js/campaigns-theme.js.
+ * ======================================================================== */
+
+html.dark {
+  --fundo: #191a1c;
+  --card: #1d1e20;
+  --borda: #34363a;
+  --borda-forte: #44474d;
+  --texto: #f1f2f3;
+  --texto-2: #afb2b8;
+  --texto-3: #92969e;
+  --primaria: #ff5abd;
+  --primaria-escura: #ff2aa0;
+  --primaria-clara: rgba(237, 3, 115, 0.16);
+  --ok: #32d583;
+  --erro: #f97066;
+  --aviso: #fdb022;
+  --sombra-suave: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.32);
+  color-scheme: dark;
+}
+
+html.dark body { background: var(--fundo); color: var(--texto); }
+
+html.dark .app-topo__barra {
+  background: rgba(25, 26, 28, 0.72);
+  border-bottom-color: var(--borda);
+}
+
+html.dark .app-logo img { filter: brightness(0) invert(1); }
+html.dark .app-nav__item { color: var(--texto-2); }
+html.dark .app-nav__item:hover { background: rgba(255, 255, 255, 0.06); }
+html.dark .app-nav__item--ativo { color: #fff; background: var(--primaria-clara); }
+html.dark .app-ambiente { color: var(--texto); }
+html.dark .app-icone { color: var(--texto-2); }
+html.dark .app-icone:hover { background: rgba(255, 255, 255, 0.06); }
+html.dark .app-usuario:hover { background: rgba(255, 255, 255, 0.06); }
+html.dark .app-usuario__avatar { background: var(--primaria-clara); color: var(--primaria); }
+html.dark .app-usuario__nome { color: var(--texto); }
+
+html.dark .app-menu__lista,
+html.dark .rodape-novidades__painel {
+  background: #242528;
+  border-color: var(--borda);
+}
+html.dark .app-menu__lista a { color: var(--texto-2); }
+html.dark .app-menu__lista a:hover { background: rgba(255, 255, 255, 0.06); }
+html.dark .app-menu__lista a[aria-current="page"] { color: #fff; background: var(--primaria-clara); }
+
+html.dark .rodape-novidades__botao {
+  background: #242528;
+  border-color: var(--borda);
+  color: var(--texto);
+}
+html.dark .rodape-novidades__botao:hover { border-color: var(--borda-forte); }
+html.dark .rodape-novidades__painel b { color: var(--texto); }
+
+html.dark .titulo-pagina { color: var(--texto); }
+html.dark .subtitulo-pagina { color: var(--texto-2); }
+html.dark .pagina-topo__icone { background: var(--primaria-clara); color: var(--primaria); }
+
+html.dark .card { background: var(--card); border-color: var(--borda); }
+html.dark .card h2 { color: var(--texto); }
+html.dark .rotulo,
+html.dark .dica,
+html.dark .contador { color: var(--texto-2); }
+html.dark .contador b { color: var(--texto); }
+
+html.dark code { background: #2b2d30; color: var(--texto); }
+
+html.dark .campo,
+html.dark #sel-campanha,
+html.dark .pasta-nome,
+html.dark input[type="number"],
+html.dark input[type="text"],
+html.dark textarea {
+  background-color: #242528;
+  border-color: var(--borda);
+  color: var(--texto);
+}
+html.dark .campo::placeholder,
+html.dark textarea::placeholder,
+html.dark input::placeholder { color: var(--texto-3); }
+html.dark #sel-campanha {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%2392969e'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m19.5 8.25-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+}
+
+html.dark .btn-sec {
+  background: #242528;
+  border-color: var(--borda);
+  color: var(--texto);
+}
+html.dark .btn-sec:hover:not(:disabled) { background: #2b2d30; }
+/* no escuro o texto é escuro sobre rosa claro: contraste alto sem brilhar */
+html.dark .btn-primario { background: #ff7ac6; color: #29001a; }
+html.dark .btn-primario:hover:not(:disabled) { background: #ff9ad6; }
+html.dark .btn-perigo { color: var(--erro); border-color: rgba(249, 112, 102, 0.35); }
+html.dark .btn-perigo:hover:not(:disabled) { background: rgba(249, 112, 102, 0.12); }
+
+html.dark .segmentado { background: #242528; }
+html.dark .seg { color: var(--texto-2); }
+html.dark .seg.ativo { background: #34363a; color: var(--texto); box-shadow: none; }
+
+html.dark .switch { background: #44474d; }
+html.dark .switch::after { background: #f1f2f3; }
+
+html.dark .pill-ok { background: rgba(50, 213, 131, 0.14); color: var(--ok); }
+html.dark .pill-erro { background: rgba(249, 112, 102, 0.14); color: var(--erro); }
+html.dark .pill-neutro { background: #2b2d30; color: var(--texto-2); }
+
+html.dark .detalhes summary { color: var(--texto-2); }
+html.dark .lista-erros { color: var(--erro); }
+html.dark .lista-erros .motivo { color: var(--texto-2); }
+
+html.dark .tabela-wrap { border-color: var(--borda); }
+html.dark table thead th { background: #242528; color: var(--texto-2); border-color: var(--borda); }
+html.dark table tbody td { border-color: #2b2d30; color: var(--texto); }
+html.dark table tbody tr:hover td { background: #1f2023; }
+
+html.dark .log { background: #141516; border-color: var(--borda); color: var(--texto-2); }
+html.dark .log .log-erro { color: var(--erro); }
+html.dark .log .log-aviso { color: var(--aviso); }
+
+html.dark .barra-progresso { background: #2b2d30; }
+html.dark .barra-progresso > div { background: var(--primaria); }
+html.dark .contador-bloco { background: #1f2023; border-color: var(--borda); }
+
+html.dark .aviso-atencao,
+html.dark .aviso-perigo,
+html.dark .faixa-faixa {
+  background: rgba(253, 176, 34, 0.12);
+  border-color: rgba(253, 176, 34, 0.35);
+  color: #fdb022;
+}
+html.dark .aviso-perigo {
+  background: rgba(249, 112, 102, 0.12);
+  border-color: rgba(249, 112, 102, 0.35);
+  color: var(--erro);
+}
+
+/* o aviso amarelo da seção de variação de texto é claro por natureza:
+   no escuro ele fica com fundo escuro e texto âmbar legível */
+html.dark .dica-aviso {
+  background: rgba(253, 176, 34, 0.12);
+  border-left-color: var(--aviso);
+  color: #fdb022;
+}
+
+html.dark .estado-vazio { color: var(--texto-2); }
+html.dark .estado-vazio b { color: var(--texto); }
+html.dark .upload-progresso { background: #2b2d30; }
+
+html.dark .pasta-arquivos .chip,
+html.dark .pasta-item { background: #242528; border-color: var(--borda); color: var(--texto); }

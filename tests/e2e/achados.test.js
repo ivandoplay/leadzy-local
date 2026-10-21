@@ -840,8 +840,107 @@ test("ACHADO 12: a página usa o mesmo cabeçalho, rodapé e paleta das outras t
   assert.ok(r.temRodape, "a página precisa do rodapé que as outras telas têm");
   assert.match(r.rodapeTexto, /Novidades/);
 
-  // mesma cor de marca e mesmo fundo das outras telas (antes era #ef345a e cinza)
-  assert.equal(r.corPrimaria, "rgb(237, 3, 115)", "o botão principal usa o rosa da marca");
+  // mesma família de cor da marca das outras telas (antes era #ef345a, um
+  // vermelho que não existia em lugar nenhum do app). É pink-700 e não
+  // pink-600 porque o branco sobre pink-600 fica em 4,32:1, abaixo do AA.
+  assert.equal(r.corPrimaria, "rgb(220, 0, 96)", "o botão principal usa o rosa da marca");
   assert.equal(r.fundo, "rgb(255, 255, 255)", "o fundo é branco, como no resto da extensão");
   assert.match(r.fonte, /Inter/);
+});
+
+/* ===========================================================================
+ * ACHADO 12 (continuação) — tema escuro e contraste
+ * ======================================================================== */
+
+/** Luminância relativa e razão de contraste do WCAG. */
+function contraste(corA, corB) {
+  const partes = (c) => c.match(/[\d.]+/g).map(Number);
+  const lum = ([r, g, b]) => {
+    const f = (v) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const a = lum(partes(corA));
+  const b = lum(partes(corB));
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+test("ACHADO 12: a página segue o tema escuro escolhido no app", async () => {
+  await abrirCampanhas();
+
+  const claro = await page.evaluate(() => ({
+    classe: document.documentElement.className,
+    fundo: getComputedStyle(document.body).backgroundColor,
+  }));
+  assert.equal(claro.classe.includes("dark"), false);
+  assert.equal(claro.fundo, "rgb(255, 255, 255)");
+
+  // é esta a chave que o menu do usuário grava nas outras telas
+  await page.evaluate(() => new Promise((r) => chrome.storage.local.set({ isDarkMode: true }, r)));
+  await sleep(600);
+
+  const escuro = await page.evaluate(() => ({
+    classe: document.documentElement.className,
+    fundo: getComputedStyle(document.body).backgroundColor,
+    cartao: getComputedStyle(document.querySelector(".card")).backgroundColor,
+    texto: getComputedStyle(document.body).color,
+  }));
+
+  assert.equal(escuro.classe.includes("dark"), true, "a classe dark tem de ser aplicada");
+  assert.equal(escuro.fundo, "rgb(25, 26, 28)", "mesmo fundo das outras telas no escuro");
+  assert.equal(escuro.texto, "rgb(241, 242, 243)");
+
+  // e sobrevive ao recarregar
+  await page.reload({ waitUntil: "load" });
+  await page.waitForFunction(() => !!window.__LZ_CAMPANHA_UI__, { timeout: 20000 });
+  await sleep(700);
+
+  const aposReload = await page.evaluate(() => ({
+    classe: document.documentElement.className,
+    fundo: getComputedStyle(document.body).backgroundColor,
+  }));
+  assert.equal(aposReload.classe.includes("dark"), true, "o tema tem de persistir no reload");
+  assert.equal(aposReload.fundo, "rgb(25, 26, 28)");
+
+  await page.evaluate(() => new Promise((r) => chrome.storage.local.set({ isDarkMode: false }, r)));
+  await sleep(300);
+});
+
+test("ACHADO 12: texto e controles passam no contraste mínimo AA nos dois temas", async () => {
+  await abrirCampanhas();
+
+  for (const escuro of [false, true]) {
+    await page.evaluate((d) => new Promise((r) => chrome.storage.local.set({ isDarkMode: d }, r)), escuro);
+    await sleep(500);
+
+    const c = await page.evaluate(() => {
+      const g = (sel, prop) => {
+        const el = document.querySelector(sel);
+        return el ? getComputedStyle(el)[prop] : null;
+      };
+      return {
+        fundo: g("body", "backgroundColor"),
+        texto: g("body", "color"),
+        cartao: g(".card", "backgroundColor"),
+        titulo: g(".card h2", "color"),
+        dica: g(".dica", "color"),
+        campoFundo: g(".campo", "backgroundColor"),
+        campoTexto: g(".campo", "color"),
+        primarioFundo: g(".btn-primario", "backgroundColor"),
+        primarioTexto: g(".btn-primario", "color"),
+      };
+    });
+
+    const tema = escuro ? "escuro" : "claro";
+    assert.ok(contraste(c.texto, c.fundo) >= 4.5, `texto/fundo no tema ${tema}`);
+    assert.ok(contraste(c.titulo, c.cartao) >= 4.5, `título no tema ${tema}`);
+    assert.ok(contraste(c.dica, c.cartao) >= 4.5, `texto de apoio no tema ${tema}`);
+    assert.ok(contraste(c.campoTexto, c.campoFundo) >= 4.5, `texto do campo no tema ${tema}`);
+    assert.ok(contraste(c.primarioTexto, c.primarioFundo) >= 4.5, `botão principal no tema ${tema}`);
+  }
+
+  await page.evaluate(() => new Promise((r) => chrome.storage.local.set({ isDarkMode: false }, r)));
+  await sleep(300);
 });
