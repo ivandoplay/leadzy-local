@@ -1,0 +1,18 @@
+{
+  "name": "leadzy-local-tests",
+  "private": true,
+  "version": "1.1.0",
+  "scripts": {
+    "test": "./run-all.sh",
+    "test:unit": "node --test unit/",
+    "test:e2e": "node --test --test-concurrency=1 e2e/extension.test.js",
+    "test:content": "node --test --test-concurrency=1 e2e/content-script.test.js",
+    "test:diff": "node --test --test-concurrency=1 e2e/differential.test.js",
+    "test:rede": "node --test --test-concurrency=1 e2e/sem-rede.test.js",
+    "audit:botoes": "node audit/botoes.js",
+    "audit:modos": "node audit/modos.js",
+    "audit:acoes": "node audit/acoes.js",
+    "setup": "npm i && npx playwright install chromium"
+  },
+  "dependencies": { "playwright": "^1.56.0" }
+}

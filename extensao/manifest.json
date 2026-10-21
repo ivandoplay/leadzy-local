@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "Leadzy",
+  "version": "4.0.4",
+  "description": "Maximize suas conversões no WhatsApp com Leadzy!",
+  "default_locale": "pt_BR",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "tabs",
+    "scripting",
+    "declarativeNetRequest"
+  ],
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "js/service-worker-local.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://web.whatsapp.com/*"
+      ],
+      "js": [
+        "js/local-bootstrap.js",
+        "js/content-script.js"
+      ],
+      "css": [
+        "css/styles.css",
+        "css/content-script.css"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Leadzy",
+    "default_icon": {
+      "128": "icons/128.png"
+    }
+  },
+  "options_page": "options.html",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "js/wapi.js",
+        "js/mount.js",
+        "fonts/*"
+      ],
+      "matches": [
+        "*://web.whatsapp.com/*"
+      ]
+    }
+  ],
+  "host_permissions": [
+    "*://web.whatsapp.com/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "bloqueio-externo",
+        "enabled": true,
+        "path": "rules/bloqueio-externo.json"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+# Dependências e bibliotecas baixadas (reconstruídas por tests/setup.sh)
+tests/node_modules/
+tests/libs/
+node_modules/
+
+# Build da Chrome Web Store (gerado, não versionado)
+extensao/_metadata/
+
+# Artefatos regeneráveis
+leadzy-local.zip
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Perfil do Chromium de teste
+.config/

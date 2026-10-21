@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 20" role="img" aria-label="España">
+  <defs><clipPath id="es"><rect width="28" height="20" rx="2"/></clipPath></defs>
+  <g clip-path="url(#es)">
+    <rect width="28" height="20" fill="#F6C945"/>
+    <path d="M0 0h28v5H0zm0 15h28v5H0z" fill="#C93645"/>
+    <path d="M8.2 8.1h2.5v4.2H8.2z" fill="#C93645" opacity=".9"/>
+    <path d="M7.6 7.4h3.7M7.8 12.9h3.3" stroke="#C93645" stroke-width=".65" stroke-linecap="round"/>
+  </g>
+</svg>

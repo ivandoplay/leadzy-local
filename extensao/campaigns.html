@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Leadzy · Disparo em massa</title>
+    <script src="js/local-bootstrap.js"></script>
+    <script src="js/campaign-engine.js"></script>
+    <link href="css/campaigns.css" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="topo">
+      <div class="marca">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+        </svg>
+        <strong>Disparo em massa</strong>
+      </div>
+      <div class="topo-acoes">
+        <select id="sel-campanha" title="Campanhas salvas"></select>
+        <button id="btn-nova" class="btn btn-sec">Nova</button>
+        <button id="btn-excluir" class="btn btn-sec btn-perigo">Excluir</button>
+        <button id="btn-wpp" class="btn btn-sec">Abrir WhatsApp</button>
+      </div>
+    </header>
+
+    <div id="aviso-wpp" class="faixa-faixa oculto">
+      <span id="aviso-wpp-texto"></span>
+    </div>
+
+    <main>
+      <div class="colunas">
+        <!-- ============================ COLUNA ESQUERDA ==================== -->
+        <div class="coluna">
+          <!-- Nome -->
+          <section class="card">
+            <label class="rotulo" for="nome">Nome da campanha</label>
+            <input id="nome" class="campo" type="text" placeholder="Ex.: Promoção de outubro" />
+          </section>
+
+          <!-- 1. Lista -->
+          <section class="card">
+            <div class="card-topo">
+              <h2>1. Lista de números</h2>
+              <button id="btn-analisar" class="btn btn-sec btn-pequeno">Analisar</button>
+            </div>
+            <p class="dica">
+              Cole um por linha. Aceita <code>(11) 99999-8888</code>, <code>+55 11 99999-8888</code>,
+              ou vários separados por vírgula, ponto e vírgula ou espaço.
+            </p>
+            <textarea id="lista" class="campo area" rows="7" placeholder="(11) 99999-8888&#10;21 98888-7777&#10;..."></textarea>
+
+            <div id="resumo-lista" class="resumo oculto">
+              <span class="pill pill-ok"><b id="n-validos">0</b> válidos</span>
+              <span class="pill pill-erro"><b id="n-invalidos">0</b> inválidos</span>
+              <span class="pill pill-neutro"><b id="n-duplicados">0</b> duplicados</span>
+            </div>
+
+            <details id="det-invalidos" class="detalhes oculto">
+              <summary>Ver números recusados</summary>
+              <ul id="lista-invalidos" class="lista-erros"></ul>
+            </details>
+          </section>
+
+          <!-- 2. Conteúdo -->
+          <section class="card">
+            <h2>2. Mensagem</h2>
+
+            <div class="segmentado" role="tablist">
+              <button class="seg ativo" data-modo="fixo">Fixa</button>
+              <button class="seg" data-modo="spintax">Spintax</button>
+              <button class="seg" data-modo="rotacao">Rotação</button>
+            </div>
+
+            <div id="painel-fixo" class="painel-modo">
+              <p class="dica">Todo mundo recebe exatamente o mesmo texto.</p>
+            </div>
+
+            <div id="painel-spintax" class="painel-modo oculto">
+              <p class="dica">
+                Use <code>{opção 1|opção 2}</code> — o sistema sorteia uma a cada envio.
+                Pode aninhar: <code>{Oi|Olá}, {tudo bem|beleza}?</code>
+              </p>
+              <div class="contador">Variações possíveis: <b id="n-variacoes">1</b></div>
+            </div>
+
+            <div id="painel-rotacao" class="painel-modo oculto">
+              <p class="dica">
+                Cada bloco abaixo é uma mensagem completa. O sistema alterna entre elas,
+                na ordem, sem repetir em sequência.
+              </p>
+              <div id="rotacao-lista"></div>
+              <button id="btn-add-rotacao" class="btn btn-sec btn-pequeno">+ Adicionar mensagem</button>
+            </div>
+
+            <textarea id="texto-fixo" class="campo area" rows="5" placeholder="Escreva a mensagem..."></textarea>
+            <div class="contador" id="contador-caracteres">0 caracteres</div>
+          </section>
+
+          <!-- 3. Proteções -->
+          <section class="card">
+            <h2>3. Proteções anti-bloqueio</h2>
+
+            <label class="switch-linha">
+              <input type="checkbox" id="chk-homoglifos" />
+              <span class="switch"></span>
+              <span class="switch-texto">
+                <b>Homoglifos</b>
+                <small>Troca letras por caracteres de outro alfabeto visualmente idênticos
+                  (о cirílico no lugar de o). Mesma leitura, texto diferente.</small>
+              </span>
+            </label>
+            <div id="homoglifos-opcoes" class="sub-opcoes oculto">
+              <label class="linha-range">
+                <span>Intensidade</span>
+                <input type="range" id="range-homoglifos" min="10" max="100" step="10" value="100" />
+                <b id="val-homoglifos">100%</b>
+              </label>
+              <p class="dica">100% troca toda letra elegível. 40–60% costuma ser mais natural.</p>
+            </div>
+
+            <label class="switch-linha">
+              <input type="checkbox" id="chk-invisiveis" />
+              <span class="switch"></span>
+              <span class="switch-texto">
+                <b>Caracteres invisíveis no final</b>
+                <small>Cola caracteres de largura zero após a mensagem. Não aparece nada,
+                  mas cada envio fica único.</small>
+              </span>
+            </label>
+            <div id="invisiveis-opcoes" class="sub-opcoes oculto">
+              <label class="linha-range">
+                <span>Quantidade</span>
+                <input type="range" id="range-invisiveis" min="1" max="12" step="1" value="4" />
+                <b id="val-invisiveis">4</b>
+              </label>
+              <label class="check-linha">
+                <input type="checkbox" id="chk-invisiveis-espaco" checked />
+                <span>Incluir espaços finos (a pessoa sente o espaço ao digitar, mas não vê)</span>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <!-- ============================ COLUNA DIREITA ===================== -->
+        <div class="coluna">
+          <!-- Mídia -->
+          <section class="card">
+            <div class="card-topo">
+              <h2>4. Áudios e imagens</h2>
+              <button id="btn-add-pasta" class="btn btn-sec btn-pequeno">+ Pasta</button>
+            </div>
+            <p class="dica">
+              O sistema escolhe <b>um arquivo de cada pasta</b> por envio. Duas pastas de áudio
+              = dois áudios na mesma mensagem.
+            </p>
+            <div id="pastas"></div>
+            <p id="sem-pastas" class="vazio">Nenhuma pasta criada.</p>
+          </section>
+
+          <!-- Ritmo -->
+          <section class="card">
+            <h2>5. Ritmo</h2>
+
+            <div class="grade-2">
+              <label class="campo-rotulado">
+                <span>Intervalo entre mensagens (segundos)</span>
+                <div class="par">
+                  <input id="int-min" class="campo" type="number" min="1" value="20" />
+                  <span>a</span>
+                  <input id="int-max" class="campo" type="number" min="1" value="45" />
+                </div>
+              </label>
+
+              <label class="campo-rotulado">
+                <span>Mensagens por lote</span>
+                <div class="par">
+                  <input id="lote-min" class="campo" type="number" min="1" value="8" />
+                  <span>a</span>
+                  <input id="lote-max" class="campo" type="number" min="1" value="12" />
+                </div>
+              </label>
+
+              <label class="campo-rotulado largo">
+                <span>Pausa entre lotes (minutos)</span>
+                <div class="par">
+                  <input id="pausa-min" class="campo" type="number" min="0" value="5" />
+                  <span>a</span>
+                  <input id="pausa-max" class="campo" type="number" min="0" value="10" />
+                </div>
+              </label>
+            </div>
+
+            <div class="estimativa">
+              Tempo estimado: <b id="estimativa">—</b>
+            </div>
+          </section>
+
+          <!-- Travas de segurança -->
+          <section class="card">
+            <h2>5b. Travas de segurança</h2>
+            <p class="dica">
+              O disparo para sozinho quando alguma coisa está errada. Zero desliga a trava.
+            </p>
+
+            <div class="grade-2">
+              <label class="campo-rotulado">
+                <span>Pausar após N falhas seguidas</span>
+                <input id="prot-falhas" class="campo" type="number" min="0" value="5" />
+              </label>
+
+              <label class="campo-rotulado">
+                <span>Limite de mensagens por dia</span>
+                <input id="prot-limite" class="campo" type="number" min="0" value="0" />
+              </label>
+            </div>
+
+            <div class="estimativa">
+              Hoje: <b id="enviados-hoje">0</b> enviadas
+              <span id="limite-info"></span>
+            </div>
+          </section>
+
+          <!-- Execução -->
+          <section class="card card-execucao">
+            <h2>6. Execução</h2>
+
+            <div class="barra-progresso"><div id="progresso-barra"></div></div>
+            <div class="progresso-texto">
+              <span id="progresso-texto">Aguardando início</span>
+              <b id="progresso-percentual">0%</b>
+            </div>
+
+            <div class="contadores">
+              <div class="contador-bloco"><b id="c-enviados">0</b><span>enviados</span></div>
+              <div class="contador-bloco"><b id="c-falhas">0</b><span>falhas</span></div>
+              <div class="contador-bloco"><b id="c-pendentes">0</b><span>na fila</span></div>
+              <div class="contador-bloco"><b id="c-total">0</b><span>total</span></div>
+            </div>
+
+            <div class="acoes-execucao">
+              <button id="btn-iniciar" class="btn btn-primario">Iniciar disparo</button>
+              <button id="btn-pausar" class="btn btn-sec oculto">Pausar</button>
+              <button id="btn-retomar" class="btn btn-sec oculto">Retomar</button>
+              <button id="btn-cancelar" class="btn btn-sec btn-perigo oculto">Cancelar</button>
+            </div>
+
+            <div id="log" class="log" aria-live="polite"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Relatório -->
+      <section class="card">
+        <div class="card-topo">
+          <h2>7. Relatório</h2>
+          <div class="topo-acoes">
+            <button id="btn-csv" class="btn btn-sec btn-pequeno">Baixar CSV</button>
+            <button id="btn-reproc" class="btn btn-sec btn-pequeno">Reprocessar falhas</button>
+            <button id="btn-limpar-pendentes" class="btn btn-sec btn-perigo btn-pequeno">
+              Remover não enviados
+            </button>
+          </div>
+        </div>
+        <div class="tabela-wrap">
+          <table id="tabela-contatos">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Número</th>
+                <th>Status</th>
+                <th>Enviado em</th>
+                <th>Erro</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="corpo-tabela"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="js/campaigns-ui.js"></script>
+  </body>
+</html>
