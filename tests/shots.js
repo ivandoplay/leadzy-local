@@ -1,4 +1,4 @@
-const {launch,sleep}=require('/home/user/tests/lib/env');
+const {launch,sleep}=require('./lib/env');
 (async()=>{
   const {ctx,id}=await launch();
   const page=await ctx.newPage();
@@ -6,7 +6,6 @@ const {launch,sleep}=require('/home/user/tests/lib/env');
   await page.goto(`chrome-extension://${id}/campaigns.html`,{waitUntil:"load"});
   await page.waitForFunction(()=>!!window.__LZ_CAMPANHA_UI__,{timeout:20000});
   await sleep(1000);
-  // campanha com contatos variados para mostrar selos
   await page.evaluate(()=>{
     const C=window.LZCampanha, ui=window.__LZ_CAMPANHA_UI__;
     const c=JSON.parse(JSON.stringify(ui.getCampanha()));
@@ -17,16 +16,13 @@ const {launch,sleep}=require('/home/user/tests/lib/env');
     c.status="pausada"; c.cursor=7;
     ui.setCampanha(c);
   });
-  await sleep(600);
-  await page.screenshot({path:"/home/user/docs/capturas/campanhas-desktop.png",fullPage:false});
+  await sleep(700);
+  await page.screenshot({path:"/home/user/docs/capturas/campanhas-desktop.png"});
+  const erros = [];
+  page.on("pageerror", e=>erros.push(e.message));
   await page.setViewportSize({width:390,height:844});
-  await sleep(500);
-  await page.screenshot({path:"/home/user/docs/capturas/campanhas-mobile.png",fullPage:false});
-  const dash=await ctx.newPage();
-  await dash.setViewportSize({width:1280,height:900});
-  await dash.goto(`chrome-extension://${id}/options.html#/dashboard`,{waitUntil:"load"});
-  await sleep(3000);
-  await dash.screenshot({path:"/home/user/docs/capturas/dashboard-primeiros-passos.png",fullPage:false});
+  await sleep(400);
+  await page.screenshot({path:"/home/user/docs/capturas/campanhas-mobile.png"});
+  console.log("erros:", JSON.stringify(erros));
   await ctx.close();
-  console.log("ok");
 })();

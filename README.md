@@ -43,9 +43,9 @@ extensao/           fonte carregada pelo Chrome
   campaigns.html             página do disparo em massa
 
 tests/
-  unit/            154 testes, rodam sem navegador
-  e2e/             133 testes em Chromium real
-  run-all.sh        suíte completa (12 blocos)
+  unit/            159 testes, rodam sem navegador
+  e2e/             140 testes em Chromium real
+  run-all.sh        suíte completa (13 blocos)
   setup.sh          prepara Chromium e dependências
 
 *.md                documentação de auditoria e decisões
@@ -63,14 +63,14 @@ cd tests
 
 > `tests/libs/` ocupa ~70 MB (bibliotecas do Chromium extraídas dos `.deb`).
 > Ela **não é versionada** e o `setup.sh` a reconstrói — apague quando não
-> estiver testando. Os 154 testes unitários rodam sem ela; só os end-to-end
+> estiver testando. Os 159 testes unitários rodam sem ela; só os end-to-end
 > precisam dela.
 
-Resultado atual: **12 blocos, 287 testes, 0 falhas**, ~13 minutos.
+Resultado atual: **13 blocos, 299 testes, 0 falhas**, ~15 minutos.
 
 | Bloco | Testes | O que cobre |
 |---|---|---|
-| Unitários | 154 | motor de campanha, roteador, helpers |
+| Unitários | 159 | motor de campanha, roteador, helpers |
 | End-to-end | 16 | extensão carregada no Chromium |
 | Fluxos + backup | 8 | criar, salvar, exportar, restaurar |
 | Content script | 10 | injeção e diferencial contra o original |
@@ -80,7 +80,8 @@ Resultado atual: **12 blocos, 287 testes, 0 falhas**, ~13 minutos.
 | Auditoria de botões | 11 | nenhum tráfego externo |
 | Service worker | 7 | prova com DNS da Leadzy derrubado |
 | Jornada de instalação | 9 | popup, dashboard, primeiros passos |
-| Achados da auditoria | 26 | fila, tabela, onboarding, mídia, acessibilidade |
+| Achados da auditoria | 27 | fila, tabela, onboarding, mídia, acessibilidade |
+| Nono dígito | 6 | com 9 e sem 9, nova tentativa só em falha confirmada |
 | Integridade do estado | 12 | recarga, concorrência, falha parcial, memória |
 
 Os testes abrem Chromium de verdade e fazem envios contra um sósia do
@@ -96,6 +97,7 @@ WhatsApp Web que fala o mesmo protocolo. Envio contra o WhatsApp real **não**
 | `DISPARO-EM-MASSA.md` | especificação da feature de campanhas |
 | `MELHORIAS.md` | análise de desempenho e o que foi corrigido |
 | `AUDITORIA-PROMPT.md` | os 13 achados da auditoria: verificação, correção, testes, antes × depois |
+| `TESTS.md` | inventário de todos os testes, o que cada um prova e como rodar |
 | `AUDITORIA-CORRECOES.md` | auditoria externa: o que era bug e foi corrigido |
 | `JORNADA-INSTALACAO.md` | melhorias de primeira experiência |
 | `ANALISE-LEADZY.md` | o que a extensão original fazia |

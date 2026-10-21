@@ -629,7 +629,12 @@
       return Promise.reject(new Error("nada para enviar (texto e mídia vazios)"));
     }
 
-    var chatId = C.paraChatId(contato.numero);
+    // Celular brasileiro tem duas grafias (com e sem o nono dígito). A
+    // primeira tentativa é sempre com o 9; se o WhatsApp recusar o número,
+    // a mesma parte é reenviada uma vez sem o 9, imediatamente.
+    var variantes = C.variantesNumero(contato.numero);
+    var escolhida = 0; // qual variante já funcionou neste contato
+
     var pendentes = C.partesPendentes(contato);
 
     if (!pendentes.length) {
@@ -641,6 +646,60 @@
     var problemas = []; // falhas confirmadas
     var ambiguas = []; // sem confirmação
 
+    function enviarParte(parte, tentativa) {
+      var numero = variantes[tentativa] || variantes[0];
+      var payload = { tipo: parte.tipo, chatId: C.paraChatId(numero), timeoutMs: 60000 };
+      var envio;
+
+      if (parte.tipo === "texto") {
+        payload.conteudo = parte.conteudo;
+        envio = injetarEnvio(payload);
+      } else {
+        envio = lerMidia(parte.arquivo.id).then(function (dataUrl) {
+          if (!dataUrl) {
+            throw new Error("arquivo da pasta “" + parte.pastaNome + "” não encontrado");
+          }
+          payload.base64 = dataUrl.split(",")[1];
+          payload.nomeArquivo = parte.arquivo.nome;
+          return injetarEnvio(payload);
+        });
+      }
+
+      return envio.then(function (r) {
+        // timeout = não sabemos se chegou. Só falha CONFIRMADA libera a
+        // segunda tentativa: reenviar um número que pode ter recebido
+        // duplicaria a mensagem.
+        var ambiguo = !r.ok && (r.timeout || /sem resposta|timeout/i.test(String(r.erro || "")));
+        var temAlternativa = !r.ok && !ambiguo && tentativa + 1 < variantes.length;
+
+        if (temAlternativa) {
+          if (execucao && execucao.cancelado) return r;
+          log(
+            "Número " + numero + " recusado (" + (r.erro || "sem motivo") +
+              "). Tentando " + variantes[tentativa + 1] + ".",
+            "aviso"
+          );
+          escolhida = tentativa + 1;
+          return enviarParte(parte, tentativa + 1);
+        }
+
+        if (!r.ok) {
+          C.marcarParte(contato, parte.chave, ambiguo ? C.ITEM.DESCONHECIDO : C.ITEM.FALHOU, r.erro);
+          (ambiguo ? ambiguas : problemas).push(parte.chave + ": " + r.erro);
+          return;
+        }
+
+        C.marcarParte(contato, parte.chave, C.ITEM.ENVIADO);
+
+        // Libera o dataURL da memória. O arquivo continua no storage, então
+        // uma nova tentativa simplesmente o relê. Sem isto, uma campanha
+        // com 50 áudios de 2 MB deixava 100 MB presos na aba até fechá-la.
+        if (parte.tipo !== "texto" && parte.arquivo) {
+          delete midiasCache[parte.arquivo.id];
+        }
+      });
+    }
+
     pendentes.forEach(function (parte) {
       cadeia = cadeia.then(function () {
         // cancelou? não começa a próxima parte
@@ -648,46 +707,11 @@
           throw Object.assign(new Error("cancelado pelo usuário"), { cancelado: true });
         }
 
-        var payload = { tipo: parte.tipo, chatId: chatId, timeoutMs: 60000 };
-        var envio;
-
-        if (parte.tipo === "texto") {
-          payload.conteudo = parte.conteudo;
-          envio = injetarEnvio(payload);
-        } else {
-          envio = lerMidia(parte.arquivo.id).then(function (dataUrl) {
-            if (!dataUrl) {
-              throw new Error("arquivo da pasta “" + parte.pastaNome + "” não encontrado");
-            }
-            payload.base64 = dataUrl.split(",")[1];
-            payload.nomeArquivo = parte.arquivo.nome;
-            return injetarEnvio(payload);
-          });
-        }
-
-        return envio.then(
-          function (r) {
-            if (!r.ok) {
-              // timeout = não sabemos se chegou; o resto é falha confirmada
-              var ambiguo = r.timeout || /sem resposta|timeout/i.test(String(r.erro || ""));
-              C.marcarParte(contato, parte.chave, ambiguo ? C.ITEM.DESCONHECIDO : C.ITEM.FALHOU, r.erro);
-              (ambiguo ? ambiguas : problemas).push(parte.chave + ": " + r.erro);
-              return;
-            }
-            C.marcarParte(contato, parte.chave, C.ITEM.ENVIADO);
-
-            // Libera o dataURL da memória. O arquivo continua no storage, então
-            // uma nova tentativa simplesmente o relê. Sem isto, uma campanha
-            // com 50 áudios de 2 MB deixava 100 MB presos na aba até fechá-la.
-            if (parte.tipo !== "texto" && parte.arquivo) {
-              delete midiasCache[parte.arquivo.id];
-            }
-          },
-          function (e) {
-            C.marcarParte(contato, parte.chave, C.ITEM.FALHOU, e && e.message);
-            problemas.push(parte.chave + ": " + (e && e.message));
-          }
-        );
+        // as partes seguintes usam a variante que já funcionou neste contato
+        return enviarParte(parte, escolhida).then(null, function (e) {
+          C.marcarParte(contato, parte.chave, C.ITEM.FALHOU, e && e.message);
+          problemas.push(parte.chave + ": " + (e && e.message));
+        });
       });
     });
 

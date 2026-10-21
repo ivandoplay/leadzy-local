@@ -11,6 +11,10 @@ Tela nova: **Disparo em massa**. Abre pelo menu da página de Configurações
 - Cola em qualquer formato: `(11) 99999-8888`, `+55 11 99999-8888`, `11 99999-8888`,
   um por linha, ou vários por vírgula / ponto-e-vírgula / pipe / espaço.
 - Valida DDD real (26, 23, 25, 30 não existem), exige 9 no celular.
+- **Nono dígito**: celular brasileiro circula em duas grafias (`5586981638438`
+  e `558681638438`). A primeira tentativa é sempre com o 9; se o WhatsApp
+  recusar o número, o envio tenta sem o 9 na hora, uma única vez. Resultado sem
+  resposta (ambíguo) **não** repete, para não duplicar a mensagem.
 - Mostra **quantos válidos, quantos inválidos (com o motivo) e quantos duplicados**.
 - Duplicados e inválidos nunca entram na fila.
 
@@ -88,7 +92,7 @@ Arquivos novos:
 
 ## 3. Testes
 
-**200 testes, 0 falhas, 9 blocos.**
+**299 testes, 0 falhas, 13 blocos.** (`TESTS.md` tem o inventário completo)
 
 Para o disparo especificamente:
 

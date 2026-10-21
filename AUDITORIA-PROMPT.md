@@ -10,7 +10,7 @@ comandos estão citados.
 
 - Versão auditada: `extensao/` no estado anterior a esta rodada (commit `5bbcd3c`).
 - Correções: **não commitadas** no momento em que escrevi isto (commit feito no final).
-- Suíte completa depois das correções: **287 testes, 287 passando, 0 falhando**
+- Suíte completa depois das correções: **299 testes, todos passando**
   (`bash tests/run-all.sh`, log em `/tmp/full3.log`).
 
 ---
@@ -273,9 +273,10 @@ Comando: `bash tests/run-all.sh` (12 blocos, 14 invocações do runner).
 | 8 Nenhum tráfego externo | 11 | 11 ✅ |
 | 9 Service worker + DNS derrubado | 7 | 7 ✅ |
 | 10 Jornada de instalação | 9 | 9 ✅ |
-| 11 **Achados da auditoria** | 26 | 26 ✅ |
-| 12 Integridade do estado | 12 | 12 ✅ |
-| **Total** | **287** | **287 ✅ / 0 ❌** |
+| 11 **Achados da auditoria** | 27 | 27 ✅ |
+| 12 **Nono dígito** | 6 | 6 ✅ |
+| 13 Integridade do estado | 12 | 12 ✅ |
+| **Total** | **299** | **299 ✅ / 0 ❌** |
 
 `RESULTADO: TUDO PASSOU`.
 
@@ -310,6 +311,31 @@ O que inspecionei de fato, e como:
   funcionando, `role="progressbar"` com `aria-valuenow`, foco visível no switch,
   estado vazio com texto explicativo, cabeçalho de ações nomeado, selo por
   situação, aviso separado do log, indicador de salvamento mudando de estado.
+
+### Segunda rodada: consistência com o resto da extensão
+
+O painel de disparo era a única tela com identidade própria: vermelho `#ef345a`
+em vez do rosa da marca `#ed0373`, fundo cinza-azulado em vez de branco, e sem
+cabeçalho nem rodapé do aplicativo. Corrigido:
+
+- **Cabeçalho igual ao das outras telas**: logo, "Extensão", a navegação
+  Dashboard / Mensagens / Scripts / Gatilhos / Fluxos / **Disparo em massa**
+  (esta marcada com `aria-current="page"`), sino e "Usuário Local".
+- **No celular a navegação vira menu hambúrguer**, como nas outras telas
+  (abaixo de 860 px), em vez de espremer seis links numa faixa rolável.
+- **Rodapé "Novidades"** no canto inferior direito, no mesmo formato das demais
+  telas, com o resumo do que mudou nesta versão.
+- **Paleta e tipografia unificadas** (`--color-brand-pink-*`,
+  `--color-neutral-gray-*`, Inter com `letter-spacing: -0.003em`), cartões com
+  a mesma borda e raio, seletor de campanha com o mesmo desenho dos selects da
+  extensão, botão principal rosa e "Nova campanha" como ação primária.
+- Continua existindo **um único `h1`** ("Disparo em massa"), agora dentro de um
+  cabeçalho de página com ícone e subtítulo, no padrão das outras telas.
+
+Provado por teste (`ACHADO 12: a página usa o mesmo cabeçalho, rodapé e paleta
+das outras telas`), que confere a lista de links do menu, o item marcado como
+atual, a presença do rodapé, a cor calculada do botão principal
+(`rgb(237, 3, 115)`), o fundo (`rgb(255, 255, 255)`) e a fonte.
 
 **Limite honesto:** não houve validação com leitor de tela real (NVDA, VoiceOver)
 nem teste com usuários. O que está provado é a presença dos atributos e da
@@ -358,6 +384,10 @@ sandbox). A primeira execução, com o componente frio, é descartada.
    campanhas existentes e o prompt proíbe destruir dados antigos.
 4. **`_locales/` só tem `en` e `pt_BR`.** Não inventei traduções.
 5. **Leitor de tela real** não testado (ver seção E).
+6. **Nono dígito**: a segunda tentativa só acontece em **falha confirmada** do
+   WhatsApp. Se o servidor não responder (ambíguo), o contato fica como "sem
+   confirmação" e não é reenviado — repetir poderia duplicar a mensagem. Nesse
+   caso a decisão é manual, pelo botão de reprocessar.
 
 ---
 
@@ -377,6 +407,10 @@ sandbox). A primeira execução, com o componente frio, é descartada.
 - **Nenhum recurso removido, nenhum botão desativado sem explicação.** Toda ação
   bloqueada tem `title`/texto dizendo por quê.
 - **Bundles originais preservados** (lista na seção C) e nenhuma dependência nova.
+- **Nono dígito sem duplicar**: a forma com 9 é sempre a primeira; a forma sem
+  9 é tentada **uma única vez** e só depois de recusa confirmada. Há teste para
+  o caminho feliz, para a recusa, para o ambíguo e para o caso em que as duas
+  falham (sem laço).
 - **Zero tráfego externo**: o bloco 8 e o bloco 9 (com DNS da Leadzy derrubado)
   continuam passando.
 

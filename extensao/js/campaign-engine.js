@@ -153,6 +153,41 @@
     };
   }
 
+  /**
+   * Formas válidas do MESMO número, na ordem em que devem ser tentadas.
+   *
+   * Celular brasileiro circula em duas formas depois do DDD:
+   *
+   *   com o nono dígito  55 86 98163-8438  (padrão desde 2012)
+   *   sem o nono dígito  55 86  8163-8438  (registros anteriores)
+   *
+   * A primeira tentativa é sempre a forma COM o 9. Se o WhatsApp recusar o
+   * número, o envio tenta a forma SEM o 9 antes de marcar falha — o número é
+   * o mesmo, só a grafia que o servidor conhece muda.
+   *
+   * Fixo (assinante começando em 2–5) e número de outro país têm uma forma só.
+   */
+  function variantesNumero(e164) {
+    var d = String(e164 == null ? "" : e164).replace(/\D/g, "");
+    if (!/^55\d{10,11}$/.test(d)) return [d];
+
+    var ddd = d.slice(2, 4);
+    var assinante = d.slice(4);
+
+    // já veio com o 9: tenta com 9, depois sem
+    if (assinante.length === 9 && assinante.charAt(0) === "9") {
+      return ["55" + ddd + assinante, "55" + ddd + assinante.slice(1)];
+    }
+
+    // veio sem o 9, mas é celular (assinante antigo começa em 6–9):
+    // tenta primeiro a forma moderna, com o 9
+    if (assinante.length === 8 && /^[6-9]/.test(assinante)) {
+      return ["55" + ddd + "9" + assinante, "55" + ddd + assinante];
+    }
+
+    return [d];
+  }
+
   /** Converte para o chatId que o wapi espera. */
   function paraChatId(e164) {
     return String(e164).replace(/\D/g, "") + "@c.us";
@@ -1170,6 +1205,7 @@
     normalizarNumero: normalizarNumero,
     lerLista: lerLista,
     paraChatId: paraChatId,
+    variantesNumero: variantesNumero,
     dddValido: dddValido,
     // texto
     resolverSpintax: resolverSpintax,

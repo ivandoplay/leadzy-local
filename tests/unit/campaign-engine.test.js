@@ -935,3 +935,44 @@ test("a remoção recusada não altera índices nem status", () => {
 
   assert.deepStrictEqual(depois, antes);
 });
+
+/* ===========================================================================
+ * NONO DÍGITO — a mesma linha em duas grafias
+ * ======================================================================== */
+
+test("celular brasileiro tem as duas grafias, com o 9 primeiro", () => {
+  // o caso real: 5586981638438 (com 9) x 558681638438 (sem 9)
+  assert.deepEqual(E.variantesNumero("5586981638438"), [
+    "5586981638438",
+    "558681638438",
+  ]);
+  assert.deepEqual(E.variantesNumero("558681638438"), [
+    "5586981638438",
+    "558681638438",
+  ]);
+});
+
+test("a forma sem o 9 também é tentada primeiro com o 9", () => {
+  assert.deepEqual(E.variantesNumero("5511999998888"), [
+    "5511999998888",
+    "551199998888",
+  ]);
+});
+
+test("fixo e número de outro país têm uma grafia só", () => {
+  // assinante começando em 2–5 é fixo: não existe variante com 9
+  assert.deepEqual(E.variantesNumero("558633224455"), ["558633224455"]);
+  assert.deepEqual(E.variantesNumero("5586322244"), ["5586322244"]);
+  assert.deepEqual(E.variantesNumero("14155552671"), ["14155552671"]);
+});
+
+test("variantes não inventam número a partir de lixo", () => {
+  assert.deepEqual(E.variantesNumero(""), [""]);
+  assert.deepEqual(E.variantesNumero(null), [""]);
+});
+
+test("as duas grafias levam ao mesmo destino lógico, em chatIds diferentes", () => {
+  const [com9, sem9] = E.variantesNumero("5586981638438");
+  assert.equal(E.paraChatId(com9), "5586981638438@c.us");
+  assert.equal(E.paraChatId(sem9), "558681638438@c.us");
+});

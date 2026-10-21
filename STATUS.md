@@ -166,11 +166,11 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 
 ## 5. Suíte de testes
 
-**287 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~13 min)
+**299 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~15 min)
 
 | Camada | Testes |
 |---|---|
-| Unitários | 154 |
+| Unitários | 159 |
 | End-to-end (Chromium real) | 16 |
 | Links externos (allowlist + DNR) | 8 |
 | Cobertura de rotas de API | 9 |
@@ -182,9 +182,10 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 | Auditoria de botões | 11 |
 | Service worker + DNS morto | 7 |
 | Jornada de instalação | 9 |
-| **Achados da auditoria** (fila travada, tabela incremental, onboarding comprovado, mídia, ARIA) | **26** |
+| **Achados da auditoria** (fila travada, tabela incremental, onboarding comprovado, mídia, ARIA) | **27** |
+| **Nono dígito** (com 9 e sem 9, nova tentativa só em falha confirmada) | **6** |
 | Integridade do estado | 12 |
-| **Total** | **287** |
+| **Total** | **299** |
 
 Os detalhes de cada achado, incluindo o antes × depois da tabela, estão em
-`AUDITORIA-PROMPT.md`.
+`AUDITORIA-PROMPT.md`. O inventário completo dos testes está em `TESTS.md`.

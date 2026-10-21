@@ -802,3 +802,46 @@ test("ACHADO 13: a seção não promete proteção contra bloqueio", async () =>
     "a tela precisa dizer que as opções não protegem a conta"
   );
 });
+
+test("ACHADO 12: a página usa o mesmo cabeçalho, rodapé e paleta das outras telas", async () => {
+  await abrirCampanhas();
+
+  const r = await page.evaluate(() => {
+    const topo = document.querySelector(".app-topo");
+    const nav = document.querySelector(".app-nav");
+    const links = nav ? Array.from(nav.querySelectorAll("a")).map((a) => a.textContent.trim()) : [];
+    const ativo = nav ? nav.querySelector('[aria-current="page"]') : null;
+    const rodape = document.querySelector(".rodape-novidades");
+    const primario = document.querySelector("#btn-nova");
+    const corpo = getComputedStyle(document.body);
+    return {
+      temTopo: !!topo,
+      links,
+      ativo: ativo ? ativo.textContent.trim() : null,
+      temRodape: !!rodape,
+      rodapeTexto: rodape ? rodape.innerText.trim() : "",
+      corPrimaria: primario ? getComputedStyle(primario).backgroundColor : null,
+      fundo: corpo.backgroundColor,
+      fonte: corpo.fontFamily,
+    };
+  });
+
+  assert.ok(r.temTopo, "a página precisa do cabeçalho do app");
+  assert.deepEqual(r.links, [
+    "Dashboard",
+    "Mensagens",
+    "Scripts",
+    "Gatilhos",
+    "Fluxos",
+    "Disparo em massa",
+  ]);
+  assert.equal(r.ativo, "Disparo em massa", "a seção atual fica marcada no menu");
+
+  assert.ok(r.temRodape, "a página precisa do rodapé que as outras telas têm");
+  assert.match(r.rodapeTexto, /Novidades/);
+
+  // mesma cor de marca e mesmo fundo das outras telas (antes era #ef345a e cinza)
+  assert.equal(r.corPrimaria, "rgb(237, 3, 115)", "o botão principal usa o rosa da marca");
+  assert.equal(r.fundo, "rgb(255, 255, 255)", "o fundo é branco, como no resto da extensão");
+  assert.match(r.fonte, /Inter/);
+});
