@@ -56,9 +56,14 @@ pmw8x6.zip          pacote original, preservado para o teste diferencial
 
 ```bash
 cd tests
-./setup.sh        # primeira vez: baixa Chromium e dependências
+./setup.sh        # baixa Chromium e dependências (~70 MB em tests/libs)
 ./run-all.sh      # roda tudo
 ```
+
+> `tests/libs/` ocupa ~70 MB (bibliotecas do Chromium extraídas dos `.deb`).
+> Ela **não é versionada** e o `setup.sh` a reconstrói — apague quando não
+> estiver testando. Os 151 testes unitários rodam sem ela; só os end-to-end
+> precisam dela.
 
 Resultado atual: **11 blocos, 256 testes, 0 falhas**, ~11,5 minutos.
 
