@@ -219,9 +219,17 @@ test("/notifications devolve lista vazia (não há servidor de notificações)",
   assert.deepStrictEqual(corpo("GET", "/notifications"), []);
 });
 
-test("rotas do CRM devolvem o formato que o app espera", () => {
-  assert.deepStrictEqual(corpo("GET", "/deals"), [], "GET deve ser lista");
-  assert.deepStrictEqual(corpo("POST", "/deals"), { success: true });
-  assert.deepStrictEqual(corpo("GET", "/contacts"), []);
-  assert.deepStrictEqual(corpo("GET", "/settings/team"), []);
+test("rotas do CRM são declaradas indisponíveis, não simuladas", () => {
+  // Antes esta rota respondia [] e {success:true}: parecia ter funcionado.
+  // Agora responde 501 com marcação explícita — quem chamar sabe que não existe.
+  ["GET", "POST"].forEach((m) => {
+    const c = corpo(m, "/deals");
+    assert.strictEqual(c.success, false, `${m} /deals não pode dizer que deu certo`);
+    assert.strictEqual(c.local, true);
+    assert.strictEqual(c.desativada, true);
+    assert.strictEqual(c.rota, "/deals");
+  });
+
+  assert.strictEqual(corpo("GET", "/contacts").success, false);
+  assert.strictEqual(corpo("GET", "/settings/team").success, false);
 });

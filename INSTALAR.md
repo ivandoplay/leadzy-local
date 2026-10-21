@@ -142,13 +142,13 @@ Apague `js/local-bootstrap.js`, remova a linha dele do `manifest.json` e as tags
 
 ## Verificações que rodei
 
-**224 testes automatizados, nenhum pulado, nenhum falhando.** Os E2E rodam em Chromium real com a
+**256 testes automatizados, nenhum pulado, nenhum falhando.** Os E2E rodam em Chromium real com a
 extensão carregada (`--load-extension`), não em jsdom. A suíte completa está em
 `/home/user/tests/` — rode com `./run-all.sh`.
 
 | Camada | Testes | O que cobre |
 |---|---|---|
-| Unitários | **138** | manifest, roteador de mocks, remux de áudio, shims de rede, guarda do SW, bloqueio de links |
+| Unitários | **151** | manifest, roteador de mocks, remux de áudio, shims de rede, guarda do SW, bloqueio de links |
 | E2E (Chromium) | **16** | popup, 6 rotas, navegação, criação de mensagem/script/gatilho pela UI, `/convert` |
 | Content script | **7** | injeção no mundo isolado do WhatsApp, isolamento do mundo da página |
 | Diferencial | **3** | patch vs. pacote original (comprova que só a autenticação mudou) |
@@ -192,7 +192,7 @@ Para não haver "talvez", o que depende do WhatsApp real fica de fora:
 
 Essas cinco dependem do WhatsApp real ou de interação física — não da camada que
 foi escrita aqui. A camada local (auth, plano, conversão de áudio, isolamento de
-rede) está coberta ponta a ponta pelos 224 testes.
+rede) está coberta ponta a ponta pelos 256 testes.
 
 > Para o detalhamento honesto do que está e do que não está completo, veja
 > **`STATUS.md`**.

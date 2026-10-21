@@ -64,6 +64,11 @@
         return { ok: false, motivo: "tamanho inválido após DDI" };
       }
       if (!dddValido(resto.slice(0, 2))) return { ok: false, motivo: "DDD inválido" };
+      // mesma regra do caminho sem DDI: celular de 11 dígitos começa com 9.
+      // Sem esta checagem, "5511234567890" era aceito e "11234567890" não.
+      if (resto.length === 11 && resto.charAt(2) !== "9") {
+        return { ok: false, motivo: "celular deve começar com 9" };
+      }
       return { ok: true, e164: d };
     }
 
@@ -264,6 +269,15 @@
       return t && String(t).trim();
     });
     if (!lista.length) return "";
+
+    // Se os textos mudaram, a ordem guardada aponta para posições que não
+    // existem mais. Reconstruímos em vez de confiar no índice antigo.
+    var assinatura = lista.length + ":" + lista.join("\u0001");
+    if (config._assinatura !== assinatura) {
+      config._assinatura = assinatura;
+      config._ordem = null;
+      config._ultimo = null;
+    }
 
     if (!config._ordem || !config._ordem.length) {
       config._ordem = embaralhar(
@@ -553,10 +567,22 @@
     ENVIADO: "enviado",
     FALHOU: "falhou",
     PULADO: "pulado",
+    // O WhatsApp pode ter recebido a mensagem e a confirmação se perdeu
+    // (timeout). Não é falha nem sucesso: reenviar pode duplicar.
+    DESCONHECIDO: "desconhecido",
   };
 
   function hoje() {
     return new Date().toISOString().slice(0, 10);
+  }
+
+  /** Identificador curto e estável, usado para achar o contato depois. */
+  function novoIdContato() {
+    return (
+      "k" +
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2, 8)
+    );
   }
 
   function novoId() {
@@ -628,6 +654,7 @@
       enviado: 0,
       falhou: 0,
       pulado: 0,
+      desconhecido: 0,
       total: campanha.contatos.length,
     };
     campanha.contatos.forEach(function (c) {
@@ -638,7 +665,8 @@
 
   function progresso(campanha) {
     var m = contarPorStatus(campanha);
-    var processados = m.enviado + m.falhou + m.pulado;
+    // "desconhecido" conta como processado: não volta para a fila sozinho
+    var processados = m.enviado + m.falhou + m.pulado + m.desconhecido;
     return {
       total: m.total,
       processados: processados,
@@ -646,6 +674,7 @@
       enviados: m.enviado,
       falharam: m.falhou,
       pulados: m.pulado,
+      desconhecidos: m.desconhecido,
       pendentes: m.pendente,
     };
   }
@@ -712,16 +741,49 @@
     return null;
   }
 
-  function marcarEnviando(campanha, indice) {
-    var c = campanha.contatos[indice];
+  function marcarEnviando(campanha, idOuIndice) {
+    var c = buscarContato(campanha, idOuIndice);
     if (!c) return null;
     c.status = ITEM.ENVIANDO;
     c.tentativas++;
     return c;
   }
 
-  function marcarEnviado(campanha, indice) {
-    var c = campanha.contatos[indice];
+  /**
+   * Acha um contato por id estável.
+   *
+   * O índice da posição NÃO serve como identidade: durante uma campanha a
+   * lista pode ser editada, e o índice de um contato muda. Aceita índice só
+   * para compatibilidade com dados antigos.
+   */
+  function buscarContato(campanha, idOuIndice) {
+    if (!campanha || !campanha.contatos) return null;
+    if (idOuIndice === null || idOuIndice === undefined) return null;
+
+    // aceitar o próprio objeto (caminho mais direto, sem depender de id)
+    if (typeof idOuIndice === "object") {
+      if (idOuIndice.id) {
+        var achado = campanha.contatos.filter(function (c) {
+          return c && c.id === idOuIndice.id;
+        })[0];
+        if (achado) return achado;
+      }
+      return campanha.contatos.indexOf(idOuIndice) === -1 ? null : idOuIndice;
+    }
+
+    var porId = campanha.contatos.filter(function (c) {
+      return c && c.id === idOuIndice;
+    })[0];
+    if (porId) return porId;
+
+    if (typeof idOuIndice === "number") {
+      return campanha.contatos[idOuIndice] || null;
+    }
+    return null;
+  }
+
+  function marcarEnviado(campanha, idOuIndice) {
+    var c = buscarContato(campanha, idOuIndice);
     if (!c) return null;
     c.status = ITEM.ENVIADO;
     c.erro = null;
@@ -759,14 +821,31 @@
     return estatisticas(campanha).falhasConsecutivas >= n;
   }
 
-  function marcarFalhou(campanha, indice, erro) {
-    var c = campanha.contatos[indice];
+  function marcarFalhou(campanha, idOuIndice, erro) {
+    var c = buscarContato(campanha, idOuIndice);
     if (!c) return null;
     c.status = ITEM.FALHOU;
     c.erro = String(erro || "erro desconhecido").slice(0, 300);
 
     estatisticas(campanha).falhasConsecutivas++;
 
+    campanha.atualizadaEm = new Date().toISOString();
+    return c;
+  }
+
+  /**
+   * Resultado ambíguo: a mensagem pode ter sido entregue.
+   *
+   * Ocorre quando o envio estoura o tempo sem resposta. Tratar como falha
+   * levaria a reenviar e duplicar; tratar como sucesso esconderia o problema.
+   * Fica num estado próprio, que só o usuário resolve.
+   */
+  function marcarDesconhecido(campanha, idOuIndice, motivo) {
+    var c = buscarContato(campanha, idOuIndice);
+    if (!c) return null;
+    c.status = ITEM.DESCONHECIDO;
+    c.erro = String(motivo || "sem confirmação do WhatsApp").slice(0, 300);
+    c.enviadoEm = c.enviadoEm || null;
     campanha.atualizadaEm = new Date().toISOString();
     return c;
   }
@@ -819,9 +898,12 @@
   function reprocessarFalhas(campanha) {
     var n = 0;
     campanha.contatos.forEach(function (c) {
+      // O que ficou ambíguo NÃO volta sozinho: reenviar pode duplicar.
       if (c.status === ITEM.FALHOU) {
         c.status = ITEM.PENDENTE;
         c.erro = null;
+        // as partes que já foram enviadas continuam marcadas, então o
+        // reprocessamento manda só o texto ou só a mídia que faltou
         n++;
       }
     });
@@ -873,16 +955,21 @@
 
   /** Relatório em CSV (para abrir no Excel). */
   function relatorioCSV(campanha) {
-    var rel = gerarRelatorio(campanha);
-    var linhas = [["numero", "status", "enviado_em", "erro", "tentativas"].join(",")];
+    // O cabeçalho tinha 5 colunas e as linhas 6 valores: tudo saía deslocado
+    // no Excel. Agora a primeira coluna é "#", declarada no cabeçalho.
+    var colunas = ["#", "numero", "status", "enviado_em", "erro", "tentativas"];
+    var linhas = [colunas.join(",")];
 
-    campanha.contatos.forEach(function (c) {
-      var campo = function (v) {
-        var s = v === null || v === undefined ? "" : String(v);
-        return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-      };
+    var campo = function (v) {
+      var txt = v === null || v === undefined ? "" : String(v);
+      return /[",;\n]/.test(txt) ? '"' + txt.replace(/"/g, '""') + '"' : txt;
+    };
+
+    // índice pela posição do laço: o indexOf anterior era O(n²) e travava
+    // a exportação em listas grandes
+    campanha.contatos.forEach(function (c, i) {
       linhas.push(
-        [campanha.contatos.indexOf(c), c.numero, c.status, c.enviadoEm || "", c.erro || "", c.tentativas]
+        [i, c.numero, c.status, c.enviadoEm || "", c.erro || "", c.tentativas || 0]
           .map(campo)
           .join(",")
       );
@@ -900,28 +987,132 @@
    * Devolve [{ tipo:"texto", conteudo }] ou
    *          [{ tipo:"audio"|"imagem"|"documento", arquivo }, ...]
    */
-  function montarEnvio(campanha, indice, rng) {
+  /**
+   * O que precisa ser enviado para UM contato: texto + uma mídia de cada pasta.
+   *
+   * O plano é CONGELADO no primeiro envio (`contato.envio`). Sem isso, um
+   * reprocessamento depois de falha parcial sorteava outro arquivo e reenviava
+   * o texto inteiro — a pessoa recebia a mesma mensagem duas vezes.
+   *
+   * Cada parte tem uma chave estável e um status próprio:
+   *   { chave: "texto", tipo, status: "pendente"|"enviado"|"falhou"|"desconhecido" }
+   */
+  function montarEnvio(campanha, contatoOuIndice, rng) {
     var r = rng || Math.random;
-    var partes = [];
 
-    var texto = montarTexto(campanha.texto, indice, r);
+    var contato =
+      contatoOuIndice && typeof contatoOuIndice === "object"
+        ? contatoOuIndice
+        : buscarContato(campanha, contatoOuIndice);
+
+    if (!contato) return [];
+
+    // Todo contato precisa de id: é o que permite achar o registro certo
+    // quando a resposta chega depois de a lista ter mudado.
+    if (!contato.id) contato.id = novoIdContato();
+
+    // plano já montado: devolve como está (com os status atuais)
+    if (contato.envio && contato.envio.length) return contato.envio;
+
+    var indice = campanha.contatos.indexOf(contato);
+    var plano = [];
+
+    var texto = montarTexto(campanha.texto, indice < 0 ? 0 : indice, r);
     if (texto && texto.trim()) {
-      partes.push({
+      plano.push({
+        chave: "texto",
         tipo: "texto",
+        status: ITEM.PENDENTE,
         conteudo: transformarTexto(texto, campanha.opcoes, r),
       });
     }
 
-    var midias = escolherMidias(campanha.pastas, r);
-    midias.forEach(function (m) {
-      partes.push({
+    escolherMidias(campanha.pastas, r).forEach(function (m) {
+      plano.push({
+        chave: "midia:" + String(m.pastaId),
         tipo: m.tipo,
+        status: ITEM.PENDENTE,
         arquivo: m.item,
         pastaNome: m.pastaNome,
       });
     });
 
-    return partes;
+    contato.envio = plano;
+    return plano;
+  }
+
+  /** Marca o resultado de UMA parte (texto ou uma mídia). */
+  function marcarParte(contato, chave, status, motivo) {
+    if (!contato || !contato.envio) return null;
+    var parte = contato.envio.filter(function (p) {
+      return p.chave === chave;
+    })[0];
+    if (!parte) return null;
+
+    parte.status = status;
+    if (motivo) parte.erro = String(motivo).slice(0, 300);
+    return parte;
+  }
+
+  /** Partes que ainda precisam ser enviadas (tudo que não deu certo). */
+  function partesPendentes(contato) {
+    if (!contato || !contato.envio) return [];
+    return contato.envio.filter(function (p) {
+      return p.status !== ITEM.ENVIADO;
+    });
+  }
+
+  /** O contato está completamente enviado? */
+  function envioCompleto(contato) {
+    if (!contato || !contato.envio || !contato.envio.length) return false;
+    return contato.envio.every(function (p) {
+      return p.status === ITEM.ENVIADO;
+    });
+  }
+
+  /**
+   * Conserta uma campanha carregada do storage.
+   *
+   * Dados antigos (ou gravados por uma versão anterior) podem não ter id nos
+   * contatos, podem vir sem as proteções e podem ter ficado com status
+   * "executando" de uma aba que foi fechada. Aqui tudo é reconciliado.
+   */
+  function normalizarCampanha(c) {
+    if (!c || typeof c !== "object") return null;
+
+    if (!c.texto) c.texto = { modo: "fixo", textoFixo: "", rotacao: [] };
+    if (!Array.isArray(c.texto.rotacao)) c.texto.rotacao = [];
+    if (!c.opcoes) c.opcoes = {};
+    if (!Array.isArray(c.pastas)) c.pastas = [];
+    if (!Array.isArray(c.contatos)) c.contatos = [];
+    if (!c.ritmo) c.ritmo = {};
+    if (!c.protecoes) c.protecoes = { pausarAposFalhas: 5, limiteDiario: 0 };
+    if (!c.estatisticas) c.estatisticas = { dia: hoje(), enviadosHoje: 0, falhasConsecutivas: 0 };
+    if (typeof c.cursor !== "number" || c.cursor < 0) c.cursor = 0;
+
+    c.contatos.forEach(function (item, i) {
+      if (!item || typeof item !== "object") return;
+      if (!item.id) item.id = novoIdContato();
+      item.indice = i;
+      if (!item.status) item.status = ITEM.PENDENTE;
+      if (typeof item.tentativas !== "number") item.tentativas = 0;
+
+      // estava sendo enviado quando a aba morreu: o resultado é desconhecido
+      if (item.status === ITEM.ENVIANDO) {
+        item.status = ITEM.DESCONHECIDO;
+        item.erro = "a página foi fechada durante o envio";
+      }
+
+      if (item.envio && !Array.isArray(item.envio)) delete item.envio;
+    });
+
+    // nenhuma aba está executando ao carregar: "executando" é sempre resíduo
+    if (c.status === STATUS.EXECUTANDO) {
+      c.status = STATUS.PAUSADA;
+      c.interrompida = true;
+    }
+
+    return c;
   }
 
   /** Valida a configuração antes de deixar iniciar. */
@@ -993,6 +1184,13 @@
     cancelar: cancelar,
     finalizar: finalizar,
     proximoPendente: proximoPendente,
+    buscarContato: buscarContato,
+    marcarDesconhecido: marcarDesconhecido,
+    marcarParte: marcarParte,
+    partesPendentes: partesPendentes,
+    envioCompleto: envioCompleto,
+    normalizarCampanha: normalizarCampanha,
+    novoIdContato: novoIdContato,
     marcarEnviando: marcarEnviando,
     marcarEnviado: marcarEnviado,
     marcarFalhou: marcarFalhou,

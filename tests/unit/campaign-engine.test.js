@@ -486,8 +486,38 @@ test("CSV do relatório tem cabeçalho e uma linha por contato", () => {
   const c = campanhaExemplo(3);
   const csv = E.relatorioCSV(c);
   const linhas = csv.split("\n");
-  assert.strictEqual(linhas[0], "numero,status,enviado_em,erro,tentativas");
+  assert.strictEqual(linhas[0], "#,numero,status,enviado_em,erro,tentativas");
   assert.strictEqual(linhas.length, 4);
+});
+
+test("toda linha do CSV tem o mesmo número de colunas do cabeçalho", () => {
+  // O cabeçalho declarava 5 colunas e as linhas tinham 6 valores: os dados
+  // saíam deslocados no Excel.
+  const c = campanhaExemplo(4);
+  E.marcarEnviando(c, 0);
+  E.marcarEnviado(c, 0);
+  E.marcarEnviando(c, 1);
+  E.marcarFalhou(c, 1, 'falha, com vírgula');
+
+  const linhas = E.relatorioCSV(c).split("\n");
+  const totalColunas = (linha) => {
+    // conta vírgulas respeitando campos entre aspas
+    let n = 1, dentro = false;
+    for (const ch of linha) {
+      if (ch === '"') dentro = !dentro;
+      else if (ch === "," && !dentro) n++;
+    }
+    return n;
+  };
+
+  const esperado = totalColunas(linhas[0]);
+  assert.strictEqual(esperado, 6, "cabeçalho deve declarar 6 colunas");
+  linhas.slice(1).forEach((l, i) => {
+    assert.strictEqual(totalColunas(l), esperado, `linha ${i + 1} desalinhada: ${l}`);
+  });
+
+  // a primeira coluna é a posição, e o número vem depois
+  assert.match(linhas[1], /^0,5511/);
 });
 
 test("CSV escapa vírgula e aspas no campo de erro", () => {
@@ -660,4 +690,201 @@ test("proteções negativas são recusadas na validação", () => {
   const v = E.validar(c);
   assert.strictEqual(v.ok, false);
   assert.ok(v.erros.some((e) => /negativo/i.test(e)));
+});
+
+/* ===========================================================================
+ * INTEGRIDADE DO ESTADO (auditoria)
+ *
+ * Os quatro casos abaixo reproduzem bugs encontrados numa revisão estática
+ * e confirmados com execução: identidade por índice, CSV desalinhado,
+ * validação assimétrica de DDI e rotação com lista editada.
+ * ======================================================================== */
+
+test("remover um contato durante o envio não marca o contato errado", () => {
+  const c = campanhaExemplo(4);
+  const emVoo = E.proximoPendente(c);
+  const numeroEmVoo = emVoo.numero;
+
+  // a lista muda enquanto o envio está no ar
+  E.removerPendentes(c, [numeroEmVoo]);
+
+  const marcado = E.marcarEnviado(c, emVoo);
+  assert.strictEqual(marcado, null, "o contato removido não pode ser marcado em outro lugar");
+
+  const enviados = c.contatos.filter((x) => x.status === "enviado");
+  assert.deepStrictEqual(enviados, [], "ninguém pode aparecer como enviado");
+});
+
+test("reordenar a lista durante o envio mantém o resultado no contato certo", () => {
+  const c = campanhaExemplo(3);
+  const emVoo = E.proximoPendente(c);
+
+  const porNumero = {};
+  c.contatos.forEach((x) => (porNumero[x.numero] = x));
+  const novaOrdem = [c.contatos[2].numero, c.contatos[0].numero, c.contatos[1].numero];
+  c.contatos = novaOrdem.map((n, i) => {
+    const item = porNumero[n];
+    item.indice = i;
+    return item;
+  });
+
+  const marcado = E.marcarEnviado(c, emVoo);
+  assert.strictEqual(marcado.numero, emVoo.numero, "marcou o contato errado");
+});
+
+test("contato sem id recebe um id na primeira vez que é usado", () => {
+  const c = campanhaExemplo(2);
+  c.contatos.forEach((x) => delete x.id);
+
+  const plano = E.montarEnvio(c, c.contatos[0]);
+  assert.ok(plano.length > 0);
+  assert.ok(c.contatos[0].id, "deveria ganhar um id");
+  assert.notStrictEqual(c.contatos[0].id, c.contatos[1].id);
+});
+
+test("normalizar campanha conserta dados antigos e interrompidos", () => {
+  const antiga = {
+    id: "velha",
+    status: "executando",
+    contatos: [
+      { numero: "5511999990001", status: "enviando" },
+      { numero: "5511999990002", status: "enviado" },
+    ],
+  };
+
+  const c = E.normalizarCampanha(antiga);
+
+  assert.strictEqual(c.status, "pausada", "executando sem executor vira pausada");
+  assert.strictEqual(c.interrompida, true);
+  assert.strictEqual(c.contatos[0].status, "desconhecido", "envio interrompido é ambíguo");
+  assert.strictEqual(c.contatos[1].status, "enviado");
+  assert.ok(c.contatos.every((x) => x.id), "todo contato ganha id");
+  assert.ok(c.protecoes, "proteções padrão criadas");
+  assert.ok(c.estatisticas, "estatísticas padrão criadas");
+  assert.ok(Array.isArray(c.texto.rotacao));
+});
+
+test("normalizar não mexe no que já está certo", () => {
+  const c = campanhaExemplo(2);
+  const antes = JSON.stringify(c.contatos.map((x) => x.numero));
+  const d = E.normalizarCampanha(c);
+  assert.strictEqual(d.contatos.length, 2);
+  assert.strictEqual(JSON.stringify(d.contatos.map((x) => x.numero)), antes);
+  assert.strictEqual(d.status, "rascunho");
+  assert.notStrictEqual(d.interrompida, true);
+});
+
+test("DDI e nono dígito seguem a mesma regra", () => {
+  // 11 dígitos sem o 9 na terceira posição não é celular, tenha DDI ou não
+  const comDDI = E.normalizarNumero("5511234567890");
+  const semDDI = E.normalizarNumero("11234567890");
+
+  assert.strictEqual(comDDI.ok, false, "DDI não pode aceitar o que o formato nacional recusa");
+  assert.strictEqual(semDDI.ok, false);
+  assert.strictEqual(comDDI.motivo, semDDI.motivo, "mesmo motivo nos dois caminhos");
+
+  assert.strictEqual(E.normalizarNumero("5511999990001").ok, true);
+  assert.strictEqual(E.normalizarNumero("551133334444").ok, true, "fixo de 10 dígitos é válido");
+});
+
+test("rotação se reinicia quando os textos mudam no meio da campanha", () => {
+  const cfg = { modo: "rotacao", rotacao: ["A", "B", "C"], _ordem: null };
+  const rng = (() => {
+    let k = 0;
+    const v = [0.7, 0.2, 0.9, 0.4, 0.1, 0.6];
+    return () => v[k++ % v.length];
+  })();
+
+  // consome uma volta e meia para deixar _ordem parcialmente gasta
+  E.montarTexto(cfg, 0, rng);
+  assert.ok(cfg._ordem && cfg._ordem.length >= 0);
+
+  // usuário apaga o texto "C"
+  cfg.rotacao = ["A", "B"];
+
+  const saida = [];
+  for (let i = 0; i < 6; i++) saida.push(E.montarTexto(cfg, 0, rng));
+
+  assert.ok(!saida.includes("C"), "texto removido não pode aparecer");
+  assert.ok(
+    saida.every((x) => x === "A" || x === "B"),
+    `saiu coisa estranha: ${JSON.stringify(saida)}`
+  );
+  for (let i = 1; i < saida.length; i++) {
+    assert.notStrictEqual(saida[i], saida[i - 1], "não deve repetir em sequência");
+  }
+});
+
+test("o plano de envio é congelado: reprocessar não troca o arquivo", () => {
+  const c = campanhaExemplo(1);
+  c.pastas = [
+    {
+      id: "p1",
+      nome: "Áudios",
+      tipo: "audio",
+      itens: [
+        { id: "a1", nome: "1.ogg", tipo: "audio" },
+        { id: "a2", nome: "2.ogg", tipo: "audio" },
+      ],
+    },
+  ];
+
+  const plano1 = E.montarEnvio(c, c.contatos[0], () => 0);
+  const idEscolhido = plano1[1].arquivo.id;
+
+  // simula falha da mídia e novo sorteio no reprocessamento
+  E.marcarParte(c.contatos[0], plano1[1].chave, "falhou", "erro");
+  const plano2 = E.montarEnvio(c, c.contatos[0], () => 0.99); // rng que escolheria outro
+
+  assert.strictEqual(plano2[1].arquivo.id, idEscolhido, "o arquivo tem de ser o mesmo");
+});
+
+test("reprocessar envia só a parte que falhou, não o texto de novo", () => {
+  const c = campanhaExemplo(1);
+  c.pastas = [
+    { id: "p1", nome: "Áudios", tipo: "audio", itens: [{ id: "a1", nome: "1.ogg", tipo: "audio" }] },
+  ];
+
+  const contato = c.contatos[0];
+  const plano = E.montarEnvio(c, contato, () => 0);
+
+  // texto saiu, áudio falhou
+  E.marcarParte(contato, "texto", "enviado");
+  E.marcarParte(contato, plano[1].chave, "falhou", "arquivo sumiu");
+
+  assert.strictEqual(E.envioCompleto(contato), false);
+
+  const pendentes = E.partesPendentes(contato);
+  assert.strictEqual(pendentes.length, 1, "só uma parte deve ser reenviada");
+  assert.notStrictEqual(pendentes[0].chave, "texto", "o texto NÃO pode ser reenviado");
+  assert.strictEqual(pendentes[0].tipo, "audio");
+});
+
+test("reprocessar falhas não ressuscita envio ambíguo", () => {
+  const c = campanhaExemplo(2);
+  E.marcarDesconhecido(c, c.contatos[0], "sem resposta em 60s");
+  E.marcarFalhou(c, c.contatos[1], "número inválido");
+
+  assert.strictEqual(c.contatos[0].status, "desconhecido");
+
+  const n = E.reprocessarFalhas(c);
+
+  assert.strictEqual(n, 1, "só a falha confirmada volta para a fila");
+  assert.strictEqual(c.contatos[0].status, "desconhecido");
+  assert.strictEqual(c.contatos[1].status, "pendente");
+});
+
+test("contadores e progresso incluem o estado desconhecido", () => {
+  const c = campanhaExemplo(4);
+  E.marcarEnviado(c, c.contatos[0]);
+  E.marcarFalhou(c, c.contatos[1], "erro");
+  E.marcarDesconhecido(c, c.contatos[2], "timeout");
+
+  const p = E.progresso(c);
+  assert.strictEqual(p.enviados, 1);
+  assert.strictEqual(p.falharam, 1);
+  assert.strictEqual(p.desconhecidos, 1);
+  assert.strictEqual(p.pendentes, 1);
+  assert.strictEqual(p.processados, 3, "desconhecido conta como processado");
+  assert.strictEqual(p.percentual, 75);
 });

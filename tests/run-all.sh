@@ -85,10 +85,17 @@ JORNADA=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
-if [ $UNIT -eq 0 ] && [ $E2E1 -eq 0 ] && [ $E2E2 -eq 0 ] && [ $E2E3 -eq 0 ] && [ $E2E4 -eq 0 ] && [ $E2E5 -eq 0 ] && [ $E2E6 -eq 0 ] && [ $E2E7 -eq 0 ] && [ $LINKS -eq 0 ] && [ $ROTAS -eq 0 ] && [ $CAMPANHAS -eq 0 ] && [ $JORNADA -eq 0 ]; then
+echo " 11/11 Integridade do estado (recarga, concorrência, falha parcial)"
+echo "=================================================================="
+node --test --test-concurrency=1 e2e/integridade.test.js 2>&1 | tail -16
+INTEGRIDADE=${PIPESTATUS[0]}
+
+echo
+echo "=================================================================="
+if [ $UNIT -eq 0 ] && [ $E2E1 -eq 0 ] && [ $E2E2 -eq 0 ] && [ $E2E3 -eq 0 ] && [ $E2E4 -eq 0 ] && [ $E2E5 -eq 0 ] && [ $E2E6 -eq 0 ] && [ $E2E7 -eq 0 ] && [ $LINKS -eq 0 ] && [ $ROTAS -eq 0 ] && [ $CAMPANHAS -eq 0 ] && [ $JORNADA -eq 0 ] && [ $INTEGRIDADE -eq 0 ]; then
   echo " RESULTADO: TUDO PASSOU"
   exit 0
 else
-  echo " RESULTADO: FALHOU (unit=$UNIT e2e=$E2E1 cs=$E2E2 diff=$E2E3 rede=$E2E4 sw=$E2E5 fluxos=$E2E6 backup=$E2E7 links=$LINKS rotas=$ROTAS campanhas=$CAMPANHAS jornada=$JORNADA)"
+  echo " RESULTADO: FALHOU (unit=$UNIT e2e=$E2E1 cs=$E2E2 diff=$E2E3 rede=$E2E4 sw=$E2E5 fluxos=$E2E6 backup=$E2E7 links=$LINKS rotas=$ROTAS campanhas=$CAMPANHAS jornada=$JORNADA integridade=$INTEGRIDADE)"
   exit 1
 fi

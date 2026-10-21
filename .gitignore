@@ -16,3 +16,8 @@ Thumbs.db
 
 # Perfil do Chromium de teste
 .config/
+
+# Cache de ferramentas (Playwright, fontes)
+.cache/
+.local/
+.npm/

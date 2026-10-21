@@ -41,27 +41,58 @@
    * PERSISTÊNCIA
    * ======================================================================== */
 
+  /**
+   * Acesso ao storage que PROPAGA erro.
+   *
+   * As versões anteriores resolviam a Promise mesmo quando a gravação falhava
+   * (cota estourada, disco cheio). A interface seguia como se tivesse salvo,
+   * e a campanha em memória divergia do que estava persistido.
+   */
+  function falhaStorage(erro) {
+    var e = new Error("não foi possível acessar o armazenamento: " + (erro && erro.message));
+    e.storage = true;
+    return e;
+  }
+
   function ler(chaves) {
-    return new Promise(function (res) {
-      chrome.storage.local.get(chaves, function (d) {
-        res(d || {});
-      });
+    return new Promise(function (res, rej) {
+      try {
+        chrome.storage.local.get(chaves, function (d) {
+          var erro = chrome.runtime.lastError;
+          if (erro) return rej(falhaStorage(erro));
+          res(d || {});
+        });
+      } catch (e) {
+        rej(falhaStorage(e));
+      }
     });
   }
 
   function gravar(obj) {
-    return new Promise(function (res) {
-      chrome.storage.local.set(obj, function () {
-        res();
-      });
+    return new Promise(function (res, rej) {
+      try {
+        chrome.storage.local.set(obj, function () {
+          var erro = chrome.runtime.lastError;
+          if (erro) return rej(falhaStorage(erro));
+          res();
+        });
+      } catch (e) {
+        rej(falhaStorage(e));
+      }
     });
   }
 
   function remover(chaves) {
-    return new Promise(function (res) {
-      chrome.storage.local.remove(chaves, function () {
-        res();
-      });
+    return new Promise(function (res, rej) {
+      try {
+        chrome.storage.local.remove(chaves, function () {
+          var erro = chrome.runtime.lastError;
+          if (erro) return rej(falhaStorage(erro));
+          res();
+        });
+      } catch (e) {
+        rej(falhaStorage(e));
+      }
     });
   }
 
@@ -73,9 +104,25 @@
     obj[PREFIXO_CAMPANHA + campanha.id] = campanha;
     obj[CHAVE_INDICE] = ids;
 
-    return gravar(obj).then(function () {
-      renderizarSeletor();
-    });
+    return gravar(obj).then(
+      function () {
+        // limpa o aviso de erro: sem isto a faixa vermelha ficava na tela
+        // mesmo depois de uma gravação bem-sucedida
+        if (falhaSalvamento) {
+          falhaSalvamento = false;
+          renderizarAvisoSalvamento();
+        }
+        renderizarSeletor();
+      },
+      function (erro) {
+        // não deixa a interface mentir: marca que o estado em memória está
+        // à frente do que foi persistido
+        falhaSalvamento = true;
+        log("ERRO ao salvar: " + erro.message, "erro");
+        renderizarAvisoSalvamento();
+        throw erro;
+      }
+    );
   }
 
   function salvarComDebounce() {
@@ -344,6 +391,60 @@
   // N envios ou a cada 15 s, e sempre nos momentos que importam.
   var naoSalvos = 0;
   var ultimoSalvamento = 0;
+  var falhaSalvamento = false;
+  var preparando = false; // trava contra disparos concorrentes
+  var ultimoTentado = null; // guarda contra laço infinito
+
+  /** Faixa vermelha quando a última gravação falhou. */
+  /** Explica o que aconteceu com uma campanha interrompida. */
+  function anunciarRetomada(c) {
+    if (!c || !c.interrompida) return;
+
+    var ambiguos = c.contatos.filter(function (x) {
+      return x.status === C.ITEM.DESCONHECIDO;
+    }).length;
+
+    var msg =
+      "Esta campanha estava em execução quando a página foi fechada. " +
+      "Ela foi colocada em pausa.";
+    if (ambiguos) {
+      msg +=
+        " " +
+        ambiguos +
+        (ambiguos === 1 ? " contato ficou" : " contatos ficaram") +
+        " SEM CONFIRMAÇÃO de envio — confira no WhatsApp antes de reprocessar.";
+    }
+
+    log(msg, "erro");
+
+    var el = $("aviso-salvamento");
+    if (el) {
+      el.textContent = msg;
+      el.classList.remove("oculto");
+    }
+  }
+
+  /** Trava/libera o campo da lista conforme o disparo. */
+  function travarLista(travada) {
+    var campo = $("lista");
+    if (!campo) return;
+    campo.readOnly = travada;
+    campo.title = travada
+      ? "A lista fica travada enquanto o disparo está em andamento"
+      : "";
+    campo.style.opacity = travada ? "0.6" : "";
+    campo.style.cursor = travada ? "not-allowed" : "";
+  }
+
+  function renderizarAvisoSalvamento() {
+    var el = $("aviso-salvamento");
+    if (!el) return;
+    el.classList.toggle("oculto", !falhaSalvamento);
+    if (falhaSalvamento) {
+      el.textContent =
+        "As últimas alterações NÃO foram salvas. O progresso em tela pode ser perdido se você fechar a página.";
+    }
+  }
 
   function salvarEmLote(forcar) {
     naoSalvos++;
@@ -356,50 +457,120 @@
     return Promise.resolve();
   }
 
+  /**
+   * Envia um contato, PARTE POR PARTE.
+   *
+   * Antes, a cadeia inteira era uma Promise só: se o texto saísse e o áudio
+   * falhasse, o contato ficava "falhou" e o reprocessamento mandava o texto
+   * de novo — a pessoa recebia duas vezes.
+   *
+   * Agora cada parte tem status próprio, só as que faltaram são reenviadas,
+   * e o cancelamento é checado antes de cada uma.
+   */
   function enviarContato(contato) {
-    var partes = C.montarEnvio(campanha, contato.indice);
-    if (!partes.length) return Promise.reject(new Error("nada para enviar (texto e mídia vazios)"));
+    var plano = C.montarEnvio(campanha, contato);
+
+    if (!plano.length) {
+      return Promise.reject(new Error("nada para enviar (texto e mídia vazios)"));
+    }
 
     var chatId = C.paraChatId(contato.numero);
-    var cadeia = Promise.resolve();
+    var pendentes = C.partesPendentes(contato);
 
-    partes.forEach(function (parte) {
+    if (!pendentes.length) {
+      // tudo já saiu antes: nada a reenviar
+      return Promise.resolve({ repetido: true });
+    }
+
+    var cadeia = Promise.resolve();
+    var problemas = []; // falhas confirmadas
+    var ambiguas = []; // sem confirmação
+
+    pendentes.forEach(function (parte) {
       cadeia = cadeia.then(function () {
+        // cancelou? não começa a próxima parte
+        if (execucao && execucao.cancelado) {
+          throw Object.assign(new Error("cancelado pelo usuário"), { cancelado: true });
+        }
+
         var payload = { tipo: parte.tipo, chatId: chatId, timeoutMs: 60000 };
+        var envio;
 
         if (parte.tipo === "texto") {
           payload.conteudo = parte.conteudo;
-          return injetarEnvio(payload).then(function (r) {
-            if (!r.ok) throw new Error(r.erro);
+          envio = injetarEnvio(payload);
+        } else {
+          envio = lerMidia(parte.arquivo.id).then(function (dataUrl) {
+            if (!dataUrl) {
+              throw new Error("arquivo da pasta “" + parte.pastaNome + "” não encontrado");
+            }
+            payload.base64 = dataUrl.split(",")[1];
+            payload.nomeArquivo = parte.arquivo.nome;
+            return injetarEnvio(payload);
           });
         }
 
-        return lerMidia(parte.arquivo.id).then(function (dataUrl) {
-          if (!dataUrl) {
-            throw new Error("arquivo da pasta “" + parte.pastaNome + "” não encontrado");
+        return envio.then(
+          function (r) {
+            if (!r.ok) {
+              // timeout = não sabemos se chegou; o resto é falha confirmada
+              var ambiguo = r.timeout || /sem resposta|timeout/i.test(String(r.erro || ""));
+              C.marcarParte(contato, parte.chave, ambiguo ? C.ITEM.DESCONHECIDO : C.ITEM.FALHOU, r.erro);
+              (ambiguo ? ambiguas : problemas).push(parte.chave + ": " + r.erro);
+              return;
+            }
+            C.marcarParte(contato, parte.chave, C.ITEM.ENVIADO);
+          },
+          function (e) {
+            C.marcarParte(contato, parte.chave, C.ITEM.FALHOU, e && e.message);
+            problemas.push(parte.chave + ": " + (e && e.message));
           }
-          payload.base64 = dataUrl.split(",")[1];
-          payload.nomeArquivo = parte.arquivo.nome;
-          return injetarEnvio(payload).then(function (r) {
-            if (!r.ok) throw new Error(r.erro);
-          });
-        });
+        );
       });
     });
 
-    return cadeia;
+    return cadeia.then(function () {
+      if (C.envioCompleto(contato)) return { ok: true };
+
+      if (ambiguas.length) {
+        var e2 = new Error(ambiguas.join(" | "));
+        e2.ambiguo = true;
+        throw e2;
+      }
+      if (problemas.length) throw new Error(problemas.join(" | "));
+
+      return { ok: true };
+    });
   }
 
   function iniciar() {
     if (!campanha) return;
 
+    // Trava SÍNCRONA, antes de qualquer await.
+    //
+    // A verificação de conexão é assíncrona: sem esta trava, dois cliques
+    // rápidos passavam ambos pela validação e iniciavam preparações paralelas.
+    if (preparando || (execucao && campanha.status === C.STATUS.EXECUTANDO)) {
+      log("Já existe um disparo em preparação ou em andamento.", "erro");
+      return;
+    }
+    preparando = true;
+    ultimoTentado = null;
+    C.normalizarCampanha(campanha);
+
+    var liberar = function () {
+      preparando = false;
+    };
+
     var v = C.validar(campanha);
     if (!v.ok) {
+      liberar();
       alert("Não dá para iniciar:\n\n• " + v.erros.join("\n• "));
       return;
     }
 
     if (C.limiteDiarioAtingido(campanha)) {
+      liberar();
       alert(
         "O limite diário já foi atingido (" +
           campanha.estatisticas.enviadosHoje +
@@ -421,6 +592,7 @@
           );
         }
 
+        liberar();
         execucao = {
           campanhaId: campanha.id,
           cancelado: false,
@@ -435,6 +607,7 @@
         laco();
       })
       .catch(function (e) {
+        liberar();
         if (e && e.message) alert(e.message);
       });
   }
@@ -455,6 +628,7 @@
       if (exec.cancelado) {
         log("Disparo cancelado.", "erro");
         C.cancelar(campanha);
+        execucao = null;
         renderizar();
         naoSalvos = 0;
         salvar();
@@ -479,6 +653,7 @@
       var contato = C.proximoPendente(campanha);
       if (!contato) {
         C.finalizar(campanha);
+        execucao = null; // libera para uma próxima campanha
         renderizar();
         naoSalvos = 0;
         salvar();
@@ -486,19 +661,51 @@
         return;
       }
 
-      C.marcarEnviando(campanha, contato.indice);
+      // id estável: se a lista for editada durante o envio, a resposta
+      // continua caindo no contato certo
+      // trava contra laço infinito: se o mesmo contato voltar a ser
+      // escolhido sem que o status mude, algo está errado e paramos
+      if (ultimoTentado === contato.id && contato.status === C.ITEM.PENDENTE) {
+        C.marcarFalhou(campanha, contato, "o envio não alterou o estado do contato");
+        log("Erro interno: o contato " + contato.numero + " não saiu da fila. Parando.", "erro");
+        C.pausar(campanha);
+        exec.pausado = true;
+        renderizar();
+        salvar();
+        return;
+      }
+      ultimoTentado = contato.id;
+
+      C.marcarEnviando(campanha, contato);
       renderizar();
 
       enviarContato(contato)
         .then(function () {
           if (!aindaVale()) return;
-          C.marcarEnviado(campanha, contato.indice);
+          C.marcarEnviado(campanha, contato);
           log("Enviado para " + contato.numero, "ok");
         })
         .catch(function (e) {
           if (!aindaVale()) return;
-          C.marcarFalhou(campanha, contato.indice, e && e.message);
-          log("Falhou " + contato.numero + ": " + (e && e.message), "erro");
+
+          if (e && e.cancelado) {
+            // devolve à fila sem marcar falha
+            contato.status = C.ITEM.PENDENTE;
+            renderizar();
+            return;
+          }
+
+          if (e && e.ambiguo) {
+            // sem confirmação: não conta como falha nem como envio
+            C.marcarDesconhecido(campanha, contato, e.message);
+            log(
+              "SEM CONFIRMAÇÃO para " + contato.numero + ": " + e.message + ". Não será reenviado sozinho.",
+              "erro"
+            );
+          } else {
+            C.marcarFalhou(campanha, contato, e && e.message);
+            log("Falhou " + contato.numero + ": " + (e && e.message), "erro");
+          }
         })
         .then(function () {
           if (!aindaVale()) return;
@@ -983,6 +1190,7 @@
     renderizarProgresso();
     renderizarTabela();
     estimar();
+    travarLista(!!(execucao && !execucao.cancelado));
   }
 
   /* ==========================================================================
@@ -1206,6 +1414,14 @@
       ul.appendChild(li);
     });
 
+    // Durante o disparo a lista NÃO pode ser reconstruída: isso reindexa os
+    // contatos e a resposta de um envio em andamento cairia em outro registro.
+    var emExecucao = execucao && !execucao.cancelado;
+    if (campanha && emExecucao) {
+      log("A lista está travada enquanto o disparo está em andamento.", "erro");
+      return;
+    }
+
     // atualiza os contatos da campanha preservando o status de quem já recebeu
     if (campanha) {
       var porNumero = {};
@@ -1320,10 +1536,12 @@
           atualizarAvisoWhatsApp();
           return;
         }
-        campanha = c;
-        campanha.contatos.forEach(function (x, i) {
-          x.indice = i;
-        });
+        // Reconcilia o que ficou do jeito que estava ao fechar a aba:
+        // "executando" sem laço ativo vira pausada, e contato que estava
+        // sendo enviado vira "desconhecido" (nunca reenviado sozinho).
+        campanha = C.normalizarCampanha(c);
+        anunciarRetomada(campanha);
+        campanha.interrompida = false;
         $("lista").value = c.contatos
           .map(function (x) {
             return x.numero;
@@ -1350,7 +1568,7 @@
       return campanha;
     },
     setCampanha: function (c) {
-      campanha = c;
+      campanha = C.normalizarCampanha(c);
       renderizarFormulario();
     },
     disparar: iniciar,
@@ -1358,5 +1576,10 @@
     pausar: pausar,
     retomar: retomar,
     cancelar: cancelar,
+    // exposto para diagnóstico e testes de falha de armazenamento
+    salvarAgora: salvar,
+    estadoSalvamento: function () {
+      return { falhou: falhaSalvamento, preparando: preparando };
+    },
   };
 })();

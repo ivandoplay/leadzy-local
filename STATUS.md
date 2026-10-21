@@ -166,11 +166,11 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 
 ## 5. Suíte de testes
 
-**224 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~7 min)
+**256 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~7 min)
 
 | Camada | Testes |
 |---|---|
-| Unitários | 138 |
+| Unitários | 151 |
 | End-to-end (Chromium real) | 16 |
 | Links externos (allowlist + DNR) | 8 |
 | Cobertura de rotas de API | 7 |

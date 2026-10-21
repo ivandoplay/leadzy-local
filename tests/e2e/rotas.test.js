@@ -14,7 +14,7 @@ const assert = require("node:assert");
 const { launch } = require("../lib/env");
 const { percorrer } = require("../lib/walk");
 
-let ctx, id;
+let ctx, id, page;
 let resultado;
 
 before(async () => {
@@ -22,6 +22,11 @@ before(async () => {
   ctx = l.ctx;
   id = l.id;
   resultado = await percorrer(ctx, id);
+
+  // página própria para os testes de rota desconhecida
+  page = await ctx.newPage();
+  await page.goto(`chrome-extension://${id}/options.html`, { waitUntil: "load" });
+  await new Promise((r) => setTimeout(r, 2500));
 });
 
 after(async () => {
@@ -86,4 +91,33 @@ test("as operações de escrita não chamaram a API (persistência é local)", (
 
 test("nenhum erro de página durante a caminhada", () => {
   assert.deepStrictEqual(resultado.erros, []);
+});
+
+test("rota desconhecida responde 501 em vez de fingir sucesso", async () => {
+  // Antes, uma rota não mapeada devolvia [] ou {success:true}: a chamada
+  // parecia ter dado certo sem executar nada.
+  const r = await page.evaluate(async () => {
+    const resp = await fetch("https://api.leadzy.com.br/v1/rota-que-nao-existe-mesmo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const corpo = await resp.json().catch(() => ({}));
+    return { status: resp.status, corpo };
+  });
+
+  assert.equal(r.status, 501, "rota desconhecida precisa falhar de forma explícita");
+  assert.equal(r.corpo.success, false);
+  assert.equal(r.corpo.nao_mapeada, true);
+  assert.equal(r.corpo.rota, "/v1/rota-que-nao-existe-mesmo");
+});
+
+test("rota desativada do CRM também não simula sucesso", async () => {
+  const r = await page.evaluate(async () => {
+    const resp = await fetch("https://api.leadzy.com.br/v1/crm/qualquer-coisa");
+    return { status: resp.status, corpo: await resp.json().catch(() => ({})) };
+  });
+
+  assert.ok(r.status === 501 || r.status === 200, `status inesperado: ${r.status}`);
+  assert.notEqual(r.corpo.success, true, "não pode responder sucesso para rota desativada");
 });

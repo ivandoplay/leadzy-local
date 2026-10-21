@@ -77,13 +77,24 @@ test("killswitches sempre desligados, anúncios sempre vazios", () => {
 });
 
 test("rotas desconhecidas dos hosts deles não vazam para a rede", () => {
-  assert.deepStrictEqual(body(routeMock(`${API}/tags?search=x`, "GET", null)), []);
-  assert.deepStrictEqual(body(routeMock(`${API}/settings/team`, "GET", null)), []);
-  assert.strictEqual(body(routeMock(`${API}/notifications/abc/read`, "PATCH", null)).success, true);
-  assert.strictEqual(body(routeMock(`${API}/flows/123`, "DELETE", null)).success, true);
+  // O conteúdo é irrelevante: o que importa é que nada saia para a internet.
+  // A resposta agora é 501 explícito, nunca um falso sucesso.
+  // "/notifications/abc/read" fica de fora: é rota mapeada de verdade
+  ["/tags?search=x", "/settings/team", "/flows/123"].forEach((rota) => {
+    const r = routeMock(`${API}${rota}`, "GET", null);
+    assert.ok(r, `${rota} deveria ser interceptada`);
+    assert.strictEqual(JSON.parse(r.body).success, false, `${rota} não pode simular sucesso`);
+  });
 });
 
-test("todas as respostas são 200 e JSON (nunca 401/500)", () => {
+test("rota mapeada continua respondendo normalmente", () => {
+  // marcar notificação como lida é implementado localmente, então devolve ok
+  const r = routeMock(`${API}/notifications/abc/read`, "PATCH", null);
+  assert.strictEqual(JSON.parse(r.body).success, true);
+  assert.strictEqual(r.status, 200);
+});
+
+test("toda resposta é JSON e nada devolve 401/500 do servidor real", () => {
   const caminhos = [
     ["/auth/me", "GET"],
     ["/auth/login", "POST"],
@@ -96,7 +107,10 @@ test("todas as respostas são 200 e JSON (nunca 401/500)", () => {
   ];
   for (const [p, m] of caminhos) {
     const r = routeMock(API + p, m, null);
-    assert.strictEqual(r.status, 200, `${m} ${p}`);
+    assert.ok(r.status === 200 || r.status === 501, `${m} ${p} respondeu ${r.status}`);
     if (r.body) assert.doesNotThrow(() => JSON.parse(r.body), `${m} ${p} não é JSON`);
+    // 401 seria o servidor pedindo token; 500 seria erro dele
+    assert.notStrictEqual(r.status, 401);
+    assert.notStrictEqual(r.status, 500);
   }
 });

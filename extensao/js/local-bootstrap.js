@@ -282,16 +282,35 @@
     // fica marcada como "desativada" em vez de "não mapeada".
     for (var i = 0; i < PREFIXOS_DESATIVADOS.length; i++) {
       if (path.indexOf(PREFIXOS_DESATIVADOS[i]) === 0) {
-        return explicito(jsonResponse(method === "GET" ? [] : { success: true }));
+        // Não simular sucesso: quem chamar isto precisa saber que não existe.
+        return explicito(
+          jsonResponse(
+            { success: false, local: true, desativada: true, rota: path },
+            501
+          )
+        );
       }
     }
 
     /* ---- qualquer outra rota dos hosts deles --------------------------- */
     // Rede de segurança: nenhum byte sai para os servidores da Leadzy.
-    // Se cair aqui, é uma rota que NÃO foi mapeada — fica registrado no
-    // __LZ_ROUTE_LOG__ com origem "fallback", e o teste de cobertura falha.
-    if (method === "GET") return jsonResponse([]);
-    return jsonResponse({ success: true });
+    //
+    // Antes, uma rota desconhecida recebia [] ou {success:true} — ou seja,
+    // fingia ter funcionado. Se uma funcionalidade futura chamasse uma rota
+    // não implementada, ela pareceria ter dado certo sem fazer nada.
+    //
+    // Agora a resposta é 501 explícito, e o teste de cobertura acusa.
+    return jsonResponse(
+      {
+        success: false,
+        local: true,
+        nao_mapeada: true,
+        rota: path,
+        metodo: method,
+        mensagem: "esta rota não existe na versão local",
+      },
+      501
+    );
   }
 
   /* ==========================================================================

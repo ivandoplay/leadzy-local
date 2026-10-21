@@ -393,3 +393,14 @@ tbody tr:last-child td { border-bottom: 0; }
 .st-enviando { background: #eff8ff; color: #175cd3; }
 
 .oculto { display: none !important; }
+
+/* faixa de erro persistente (falha ao salvar) */
+.aviso-perigo {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin: 12px 0;
+}

@@ -43,9 +43,9 @@ extensao/           fonte carregada pelo Chrome
   campaigns.html             página do disparo em massa
 
 tests/
-  unit/            138 testes, rodam sem navegador
-  e2e/              86 testes em Chromium real
-  run-all.sh        suíte completa (10 blocos)
+  unit/            151 testes, rodam sem navegador
+  e2e/             105 testes em Chromium real
+  run-all.sh        suíte completa (11 blocos)
   setup.sh          prepara Chromium e dependências
 
 *.md                documentação de auditoria e decisões
@@ -60,20 +60,21 @@ cd tests
 ./run-all.sh      # roda tudo
 ```
 
-Resultado atual: **10 blocos, 224 testes, 0 falhas**, ~11 minutos.
+Resultado atual: **11 blocos, 256 testes, 0 falhas**, ~11,5 minutos.
 
 | Bloco | Testes | O que cobre |
 |---|---|---|
-| Unitários | 138 | motor de campanha, helpers, sem navegador |
+| Unitários | 151 | motor de campanha, roteador, helpers |
 | End-to-end | 16 | extensão carregada no Chromium |
 | Fluxos + backup | 8 | criar, salvar, exportar, restaurar |
 | Content script | 10 | injeção e diferencial contra o original |
-| Rotas de API | 7 | toda rota tem resposta local |
+| Rotas de API | 9 | rota desconhecida responde 501 |
 | Disparo em massa | 17 | WhatsApp Web simulado, envio real |
 | Links externos | 8 | allowlist e bloqueio via DNR |
 | Auditoria de botões | 11 | nenhum tráfego externo |
 | Service worker | 7 | prova com DNS da Leadzy derrubado |
 | Jornada de instalação | 9 | popup, dashboard, primeiros passos |
+| Integridade do estado | 10 | recarga, concorrência, falha parcial |
 
 Os testes abrem Chromium de verdade e fazem envios contra um sósia do
 WhatsApp Web que fala o mesmo protocolo. Envio contra o WhatsApp real **não**
@@ -87,6 +88,7 @@ WhatsApp Web que fala o mesmo protocolo. Envio contra o WhatsApp real **não**
 | `STATUS.md` | estado atual, o que funciona e o que não |
 | `DISPARO-EM-MASSA.md` | especificação da feature de campanhas |
 | `MELHORIAS.md` | análise de desempenho e o que foi corrigido |
+| `AUDITORIA-CORRECOES.md` | auditoria externa: o que era bug e foi corrigido |
 | `JORNADA-INSTALACAO.md` | melhorias de primeira experiência |
 | `ANALISE-LEADZY.md` | o que a extensão original fazia |
 | `MAPA-ENDPOINTS.md` | inventário de todos os endpoints |
