@@ -8,6 +8,10 @@ if [ ! -d libs/root ] || [ ! -d node_modules ]; then
   ./setup.sh || { echo "setup falhou"; exit 1; }
 fi
 
+# o tail abaixo é só para leitura rápida; o log completo de cada bloco fica
+# aqui para quando algo falhar sem aparecer na tela
+ULTIMO_LOG="$(dirname "$0")/.last-run"
+mkdir -p "$ULTIMO_LOG"
 export LD_LIBRARY_PATH="$PWD/libs/root/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 # perfis deixados por execuções interrompidas travam a subida do Chromium
@@ -16,95 +20,95 @@ rm -rf /tmp/lz-profile-* 2>/dev/null || true
 echo "=================================================================="
 echo " 1/13 Unitários (sem navegador)"
 echo "=================================================================="
-node --test unit/ 2>&1 | tail -12
+node --test unit/ 2>&1 | tee "$ULTIMO_LOG/unit.log" | tail -12
 UNIT=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 2/13 End-to-end (Chromium + extensão carregada)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/extension.test.js 2>&1 | tail -20
+node --test --test-concurrency=1 e2e/extension.test.js 2>&1 | tee "$ULTIMO_LOG/extension.log" | tail -20
 E2E1=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 3/13 Fluxos + backup/restauração"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/fluxos.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/fluxos.test.js 2>&1 | tee "$ULTIMO_LOG/fluxos.log" | tail -12
 E2E6=${PIPESTATUS[0]}
-node --test --test-concurrency=1 e2e/backup.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/backup.test.js 2>&1 | tee "$ULTIMO_LOG/backup.log" | tail -12
 E2E7=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 4/13 Content script + diferencial"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/content-script.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/content-script.test.js 2>&1 | tee "$ULTIMO_LOG/content-script.log" | tail -12
 E2E2=${PIPESTATUS[0]}
-node --test --test-concurrency=1 e2e/differential.test.js 2>&1 | tail -10
+node --test --test-concurrency=1 e2e/differential.test.js 2>&1 | tee "$ULTIMO_LOG/differential.log" | tail -10
 E2E3=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 5/13 Cobertura de rotas de API"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/rotas.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/rotas.test.js 2>&1 | tee "$ULTIMO_LOG/rotas.log" | tail -12
 ROTAS=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 6/13 Disparo em massa (WhatsApp Web simulado)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/campanhas.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/campanhas.test.js 2>&1 | tee "$ULTIMO_LOG/campanhas.log" | tail -12
 CAMPANHAS=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 7/13 Links externos (allowlist + DNR)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/links-externos.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/links-externos.test.js 2>&1 | tee "$ULTIMO_LOG/links-externos.log" | tail -12
 LINKS=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 8/13 Auditoria de botões (nenhum tráfego externo)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/sem-rede.test.js 2>&1 | tail -16
+node --test --test-concurrency=1 e2e/sem-rede.test.js 2>&1 | tee "$ULTIMO_LOG/sem-rede.log" | tail -16
 E2E4=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 9/13 Service worker + prova com DNS da Leadzy derrubado"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/service-worker.test.js 2>&1 | tail -14
+node --test --test-concurrency=1 e2e/service-worker.test.js 2>&1 | tee "$ULTIMO_LOG/service-worker.log" | tail -14
 E2E5=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 10/13 Jornada de instalação (popup + primeiros passos)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/primeiros-passos.test.js 2>&1 | tail -14
+node --test --test-concurrency=1 e2e/primeiros-passos.test.js 2>&1 | tee "$ULTIMO_LOG/primeiros-passos.log" | tail -14
 JORNADA=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 11/13 Regressão dos achados da auditoria (UI, fila, onboarding)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/achados.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/achados.test.js 2>&1 | tee "$ULTIMO_LOG/achados.log" | tail -12
 ACHADOS=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 12/13 Nono dígito (com 9 e sem 9, nova tentativa após recusa)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/nono-digito.test.js 2>&1 | tail -12
+node --test --test-concurrency=1 e2e/nono-digito.test.js 2>&1 | tee "$ULTIMO_LOG/nono-digito.log" | tail -12
 NONO=${PIPESTATUS[0]}
 
 echo
 echo "=================================================================="
 echo " 13/13 Integridade do estado (recarga, concorrência, falha parcial)"
 echo "=================================================================="
-node --test --test-concurrency=1 e2e/integridade.test.js 2>&1 | tail -16
+node --test --test-concurrency=1 e2e/integridade.test.js 2>&1 | tee "$ULTIMO_LOG/integridade.log" | tail -16
 INTEGRIDADE=${PIPESTATUS[0]}
 
 echo
