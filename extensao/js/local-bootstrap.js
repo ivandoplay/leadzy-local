@@ -183,7 +183,7 @@
 
   /**
    * Registro das rotas realmente exercitadas. Serve para a auditoria de
-   * cobertura (tests/audit/rotas.js): mostra o que foi respondido por mock
+   * cobertura (tests/e2e/rotas.test.js): mostra o que foi respondido por mock
    * explícito e o que caiu no fallback genérico.
    */
   function explicito(resposta) {

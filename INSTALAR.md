@@ -201,4 +201,4 @@ rede) está coberta ponta a ponta pelos 301 testes.
 
 86 botões (nível 1) + ~60 dentro de menus/modais (nível 2) + 10 itens que não são
 `<button>` — **todos clicados em Chromium real**. Resultado: **zero requisições
-externas, zero aberturas para fora, zero erros**. Detalhes em `AUDITORIA-BOTOES.md`.
+externas, zero aberturas para fora, zero erros**. É o bloco 8 do `tests/run-all.sh`.

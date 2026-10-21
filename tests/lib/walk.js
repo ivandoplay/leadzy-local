@@ -4,7 +4,7 @@
  * Percorre a extensão executando operações reais e devolve o log de rotas
  * registrado pelo local-bootstrap (window.__LZ_ROUTE_LOG__).
  *
- * Usado por tests/audit/rotas.js (relatório) e por tests/e2e/rotas.test.js
+ * Usado por tests/e2e/rotas.test.js
  * (regressão). Fica num arquivo só para os dois não divergirem.
  */
 

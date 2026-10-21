@@ -151,7 +151,7 @@ test("resolverUrl devolve string vazia para âncoras internas", () => {
  * ------------------------------------------------------------------------- */
 
 const INVENTARIO = [
-  // usadas em execução (ver tests/auditoria-rotas.json)
+  // usadas em execução (ver tests/e2e/rotas.test.js)
   "GET /announcements/active",
   "GET /auth/me",
   "GET /notifications",

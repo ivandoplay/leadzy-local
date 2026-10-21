@@ -189,3 +189,22 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 
 Os detalhes de cada achado, incluindo o antes × depois da tabela, estão em
 `AUDITORIA-PROMPT.md`. O inventário completo dos testes está em `TESTS.md`.
+
+## 6. Pendências herdadas de `MELHORIAS.md`
+
+O documento de melhorias foi consolidado aqui antes de sair do repositório.
+O que continua em aberto:
+
+- **Validação de número antes do envio** — o `wapi.js` tem
+  `validatePhoneNumber`, mas ela não está no barramento de comandos. Expor
+  exigiria editar o bundle, e o teste diferencial protege a integridade dele.
+  Mitigado pela trava de pausa após N falhas seguidas.
+- **Importar CSV** de contatos (hoje só colar lista ou backup `.lzb`).
+- **Retomar campanha depois de fechar o navegador** — hoje a campanha volta
+  como "interrompida" e o usuário decide o que fazer; não há retomada
+  automática.
+- **Métricas reais no dashboard** (hoje os contadores são do armazenamento local).
+- **Locales `es` e `it`** — o pacote traz só `en` e `pt_BR`.
+
+Fora de escopo por decisão: personalização de variáveis por contato
+(`{{nome}}`) — não será implementada.

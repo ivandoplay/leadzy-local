@@ -93,18 +93,17 @@ WhatsApp Web que fala o mesmo protocolo. Envio contra o WhatsApp real **não**
 | Arquivo | Conteúdo |
 |---|---|
 | `INSTALAR.md` | passo a passo de instalação e uso |
-| `STATUS.md` | estado atual, o que funciona e o que não |
+| `STATUS.md` | estado atual, o que funciona, o que não e pendências |
+| `TESTS.md` | inventário dos 301 testes, o que cada um prova e como rodar |
 | `DISPARO-EM-MASSA.md` | especificação da feature de campanhas |
-| `MELHORIAS.md` | análise de desempenho e o que foi corrigido |
 | `AUDITORIA-PROMPT.md` | os 13 achados da auditoria: verificação, correção, testes, antes × depois |
-| `TESTS.md` | inventário de todos os testes, o que cada um prova e como rodar |
-| `AUDITORIA-CORRECOES.md` | auditoria externa: o que era bug e foi corrigido |
-| `JORNADA-INSTALACAO.md` | melhorias de primeira experiência |
-| `ANALISE-LEADZY.md` | o que a extensão original fazia |
-| `MAPA-ENDPOINTS.md` | inventário de todos os endpoints |
-| `AUDITORIA-BOTOES.md` | auditoria de cada botão da interface |
-| `VAZAMENTOS-RESTANTES.md` | chamadas residuais ao servidor |
-| `DEPENDENCIA-SERVIDOR.md` | como a dependência foi removida |
+
+Os relatórios de auditoria das fases anteriores (`ANALISE-LEADZY`, `AUDITORIA-BOTOES`,
+`AUDITORIA-CORRECOES`, `DEPENDENCIA-SERVIDOR`, `MAPA-ENDPOINTS`,
+`VAZAMENTOS-RESTANTES`, `JORNADA-INSTALACAO`, `MELHORIAS`) cumpriram o papel e
+saíram do repositório: o que ainda valia foi consolidado em `STATUS.md` e nos
+testes que hoje garantem o comportamento. O texto integral continua no histórico
+do git (`git log --diff-filter=D --name-only`).
 
 ## Limites conhecidos
 
