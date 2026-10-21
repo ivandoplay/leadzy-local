@@ -210,15 +210,19 @@
               </label>
 
               <label class="campo-rotulado">
-                <span>Limite de mensagens por dia</span>
+                <span>Limite de contatos por dia</span>
                 <input id="prot-limite" class="campo" type="number" min="0" value="0" />
               </label>
             </div>
 
             <div class="estimativa">
-              Hoje: <b id="enviados-hoje">0</b> enviadas
+              Hoje: <b id="enviados-hoje">0</b> contatos concluídos
               <span id="limite-info"></span>
             </div>
+            <p class="dica">
+              Um contato conta 1, mesmo quando recebe texto e áudio: o limite é
+              de <b>contatos</b>, não de mensagens soltas.
+            </p>
           </section>
 
           <!-- Execução -->

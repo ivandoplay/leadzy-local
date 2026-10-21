@@ -12,7 +12,7 @@
 | 1.2 Gravação | lote: a cada 10 envios ou 15 s; forçada ao pausar/parar | `e2e` — progresso salvo ao pausar |
 | 1.3 *(parcial)* | trava de segurança substitui a validação prévia | ver observação abaixo |
 | 1.4 Login | bloqueia início se o WhatsApp está no QR Code | `e2e` — 3 testes |
-| 1.5 Memória | cache de mídia liberado por campanha | — |
+| 1.5 Memória | dataURL liberado após o envio (não antes: era uma afirmação minha sem código) | `e2e` — cache cai de 1 para 0 após enviar |
 | 1.6 Rotação | Fisher-Yates por volta, sem repetir em sequência | `unit` — 3 testes |
 | 1.7 | limite diário + pausa automática por falhas seguidas | `unit` 8 + `e2e` 3 |
 | 2.1 | `crm-bridge-content-script.js` removido | zip: 58 arquivos, sem o arquivo |

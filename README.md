@@ -65,7 +65,7 @@ cd tests
 > estiver testando. Os 151 testes unitários rodam sem ela; só os end-to-end
 > precisam dela.
 
-Resultado atual: **11 blocos, 256 testes, 0 falhas**, ~11,5 minutos.
+Resultado atual: **11 blocos, 258 testes, 0 falhas**, ~11,5 minutos.
 
 | Bloco | Testes | O que cobre |
 |---|---|---|
@@ -79,7 +79,7 @@ Resultado atual: **11 blocos, 256 testes, 0 falhas**, ~11,5 minutos.
 | Auditoria de botões | 11 | nenhum tráfego externo |
 | Service worker | 7 | prova com DNS da Leadzy derrubado |
 | Jornada de instalação | 9 | popup, dashboard, primeiros passos |
-| Integridade do estado | 10 | recarga, concorrência, falha parcial |
+| Integridade do estado | 12 | recarga, concorrência, falha parcial, memória |
 
 Os testes abrem Chromium de verdade e fazem envios contra um sósia do
 WhatsApp Web que fala o mesmo protocolo. Envio contra o WhatsApp real **não**

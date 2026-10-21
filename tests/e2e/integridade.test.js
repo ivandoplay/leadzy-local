@@ -24,15 +24,20 @@ const PAGINA_WPP = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8
   <div class="app-wrapper-web"></div>
   <script>
     window.__ENVIOS = [];
-    ["messages:sendTextRequest"].forEach(function (nome) {
+    // todos os tipos: sem os eventos de mídia, um envio de imagem fica
+    // esperando resposta até o timeout de 60s
+    ["messages:sendTextRequest", "messages:sendMediaRequest",
+     "messages:sendAudioRequest", "messages:sendDocumentRequest"].forEach(function (nome) {
       window.addEventListener(nome, function (e) {
         var d = e.detail || {};
-        window.__ENVIOS.push({ chatId: d.chatId, conteudo: d.content, em: Date.now() });
+        window.__ENVIOS.push({ chatId: d.chatId, evento: nome, em: Date.now() });
+        // mídia pode ser atrasada para simular envio lento
+        var espera = nome === "messages:sendTextRequest" ? 10 : (window.__ATRASO_MIDIA || 10);
         setTimeout(function () {
           window.dispatchEvent(new CustomEvent("response_" + d.correlationId, {
             detail: { success: true }
           }));
-        }, 10);
+        }, espera);
       });
     });
   </script>
@@ -79,7 +84,17 @@ async function abrirCampanhas() {
   page = await ctx.newPage();
   await page.goto(`chrome-extension://${id}/campaigns.html`, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => !!window.__LZ_CAMPANHA_UI__, { timeout: 20000 });
-  await sleep(400);
+
+  // espera o carregamento do storage terminar. Sem isto, mexer nos dados
+  // antes disso faz a campanha salva sobrescrever o que o teste montou.
+  await page.waitForFunction(
+    () => {
+      const c = window.__LZ_CAMPANHA_UI__.getCampanha();
+      return c && typeof c.id === "string" && !!document.getElementById("lista");
+    },
+    { timeout: 20000 }
+  );
+  await sleep(900);
   return page;
 }
 
@@ -381,4 +396,153 @@ test("o CSV exportado bate com o cabeçalho", async () => {
   assert.equal(linhas[0], "#,numero,status,enviado_em,erro,tentativas");
   assert.equal(linhas.length, 2);
   assert.match(linhas[1], /^0,5511\d+,enviado,/);
+});
+
+/* ===========================================================================
+ * 7. Cancelamento no meio de uma sequência de partes
+ * ======================================================================== */
+
+test("cancelar impede o envio das partes seguintes do mesmo contato", async () => {
+  const wpp = await abrirWpp();
+  await abrirCampanhas();
+
+  // duas pastas de mídia: o contato tem 3 partes (texto + 2 mídias)
+  await page.evaluate(async () => {
+    const C = window.LZCampanha;
+    const c = window.__LZ_CAMPANHA_UI__.getCampanha();
+
+    // mídias pequenas gravadas direto no storage
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    await new Promise((r) =>
+      chrome.storage.local.set(
+        {
+          "campaigns:media:m1": png,
+          "campaigns:media:m2": png,
+        },
+        r
+      )
+    );
+
+    c.pastas = [
+      { id: "pa", nome: "Fotos A", tipo: "imagem", itens: [{ id: "m1", nome: "a.png", tipo: "imagem" }] },
+      { id: "pb", nome: "Fotos B", tipo: "imagem", itens: [{ id: "m2", nome: "b.png", tipo: "imagem" }] },
+    ];
+    c.contatos = [
+      {
+        indice: 0,
+        numero: "5511999000111",
+        bruto: "",
+        status: C.ITEM.PENDENTE,
+        tentativas: 0,
+        erro: null,
+        enviadoEm: null,
+      },
+    ];
+    c.texto = { modo: "fixo", textoFixo: "primeira parte" };
+    c.opcoes = { homoglifos: false, invisiveis: false, invisiveisQtd: 0 };
+    c.status = "rascunho";
+    c.cursor = 0;
+    c.protecoes = { pausarAposFalhas: 0, limiteDiario: 0 };
+    c.ritmo = { intervaloMin: 1, intervaloMax: 1, loteMin: 100, loteMax: 100, pausaLoteMin: 0, pausaLoteMax: 0 };
+    window.__LZ_CAMPANHA_UI__.setCampanha(c);
+  });
+
+  // mídia lenta: dá tempo de cancelar no meio da sequência
+  await wpp.evaluate(() => {
+    window.__ATRASO_MIDIA = 1500;
+  });
+
+  await page.click("#btn-iniciar");
+  await sleep(500); // texto já saiu; a primeira mídia está no ar
+  await page.evaluate(() => window.__LZ_CAMPANHA_UI__.cancelar(true));
+  await sleep(2500);
+
+  const plano = await page.evaluate(() => {
+    const c = window.__LZ_CAMPANHA_UI__.getCampanha();
+    return c.contatos[0].envio.map((p) => ({ chave: p.chave, status: p.status }));
+  });
+
+  const texto = plano.find((p) => p.chave === "texto");
+  assert.equal(texto.status, "enviado", "o que já saiu continua enviado");
+
+  const naoIniciadas = plano.filter((p) => p.status === "pendente");
+  assert.equal(
+    naoIniciadas.length,
+    1,
+    `a segunda mídia não pode ter começado depois do cancelamento (pendentes: ${naoIniciadas.length})`
+  );
+  assert.strictEqual(naoIniciadas[0].chave, "midia:pb", "devia sobrar justamente a última parte");
+
+  const envios = await wpp.evaluate(() => (window.__ENVIOS || []).length);
+  assert.ok(envios <= 2, `não pode enviar a última parte depois do cancelamento (saíram ${envios})`);
+
+  await wpp.close();
+});
+
+/* ===========================================================================
+ * 8. Memória
+ * ======================================================================== */
+
+test("o dataURL é liberado da memória depois de enviado", async () => {
+  const wpp = await abrirWpp();
+  await abrirCampanhas();
+
+  // 1. coloca uma mídia no storage e carrega para o cache
+  const carregada = await page.evaluate(async () => {
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    await new Promise((r) => chrome.storage.local.set({ "campaigns:media:mem1": png }, r));
+    return window.__LZ_CAMPANHA_UI__.carregarMidia("mem1");
+  });
+
+  assert.equal(carregada.carregada, true, "a mídia deveria carregar do storage");
+  assert.equal(carregada.cache, 1, "depois de carregar, ela está na memória");
+
+  // 2. envia a mídia numa campanha
+  await page.evaluate(() => {
+    const C = window.LZCampanha;
+    const c = window.__LZ_CAMPANHA_UI__.getCampanha();
+    c.pastas = [
+      {
+        id: "pm",
+        nome: "Uma foto",
+        tipo: "imagem",
+        itens: [{ id: "mem1", nome: "x.png", tipo: "imagem" }],
+      },
+    ];
+    c.contatos = [
+      { numero: "5511999000333", bruto: "", status: C.ITEM.PENDENTE, tentativas: 0, erro: null, enviadoEm: null },
+    ];
+    c.texto = { modo: "fixo", textoFixo: "" };
+    c.opcoes = { homoglifos: false, invisiveis: false, invisiveisQtd: 0 };
+    c.status = "rascunho";
+    c.cursor = 0;
+    c.protecoes = { pausarAposFalhas: 0, limiteDiario: 0 };
+    c.ritmo = { intervaloMin: 0, intervaloMax: 0, loteMin: 100, loteMax: 100, pausaLoteMin: 0, pausaLoteMax: 0 };
+    window.__LZ_CAMPANHA_UI__.setCampanha(c);
+  });
+
+  await page.click("#btn-iniciar");
+  await page.waitForFunction(
+    () => {
+      const c = window.__LZ_CAMPANHA_UI__.getCampanha();
+      return c && c.status === "finalizada";
+    },
+    { timeout: 30000 }
+  );
+
+  const depois = await page.evaluate(() => window.__LZ_CAMPANHA_UI__.tamanhoCacheMidias());
+
+  assert.equal(depois, 0, `o dataURL deveria sair da memória após o envio (sobrou ${depois})`);
+
+  // o arquivo continua no storage: dá para reenviar sem perder nada
+  const aindaNoStorage = await page.evaluate(() =>
+    new Promise((r) =>
+      chrome.storage.local.get(["campaigns:media:mem1"], (d) => r(!!d["campaigns:media:mem1"]))
+    )
+  );
+  assert.equal(aindaNoStorage, true, "liberar memória não pode apagar o arquivo");
+
+  await wpp.close();
 });

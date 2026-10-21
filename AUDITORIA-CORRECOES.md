@@ -187,6 +187,17 @@ contato — esse caso está coberto pelo item 2.
 
 ## O que eu não corrigi, e por quê
 
+### Cache de mídia: uma afirmação minha que era falsa
+
+Ao revisar esta auditoria de novo, conferi a linha do `MELHORIAS.md` que dizia
+"cache de mídia liberado por campanha". **Não era verdade** — o cache só era
+limpo ao *excluir* o arquivo, nunca após o envio. Documentei algo que não
+existia.
+
+Corrigido agora: o dataURL sai da memória assim que a parte é confirmada, e o
+arquivo continua no storage. Teste: `o dataURL é liberado da memória depois de
+enviado` (cache 1 → 0, e o arquivo permanece).
+
 ### Homoglifos e caracteres invisíveis
 
 O auditor recomenda remover as "proteções anti-bloqueio", argumentando que
@@ -207,13 +218,17 @@ editar o bundle — o teste diferencial protege a integridade dele.
 ### Limite diário: contatos ou mensagens?
 
 O contador soma **contatos concluídos**, não mensagens individuais. Um contato
-com texto + 2 mídias conta 1. Documentado na interface.
+com texto + 2 mídias conta 1.
+
+**Agora está escrito na tela:** o campo passou a se chamar "Limite de contatos
+por dia", o contador diz "contatos concluídos" e há uma nota explicando que um
+contato conta 1 mesmo recebendo texto e áudio.
 
 ---
 
 ## Suíte depois das correções
 
-**11 blocos, 256 testes, 0 falhas.**
+**11 blocos, 258 testes, 0 falhas.**
 
 | Bloco | Antes | Agora |
 |---|---|---|
@@ -227,6 +242,24 @@ com texto + 2 mídias conta 1. Documentado na interface.
 | Auditoria de botões | 11 | 11 |
 | Service worker | 7 | 7 |
 | Jornada de instalação | 9 | 9 |
-| **Integridade do estado** | — | **10** |
+| **Integridade do estado** | — | **12** |
 
 Tempo total: ~11,5 minutos.
+
+
+---
+
+## Segunda passagem
+
+Esta auditoria foi enviada de novo, idêntica. Reconferi os 11 pontos no código
+atual e fechei o que ainda faltava:
+
+| Item | Situação | O que fiz |
+|---|---|---|
+| 5. Peso das mídias | **era falso na minha doc** | libero o dataURL após o envio; testado |
+| F. Cancelar no meio de mídias | corrigido, mas **sem teste** | teste com mídia lenta provando que a última parte não começa |
+| J. Definição do limite diário | pendente | rótulo e nota na interface |
+| K. Janela da gravação em lote | parcial | gravação em `pagehide`/`beforeunload` |
+
+Os outros sete já estavam corrigidos com teste de regressão desde a primeira
+passagem.

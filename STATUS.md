@@ -166,7 +166,7 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 
 ## 5. Suíte de testes
 
-**256 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~7 min)
+**258 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~7 min)
 
 | Camada | Testes |
 |---|---|

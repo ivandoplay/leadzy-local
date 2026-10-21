@@ -395,6 +395,33 @@
   var preparando = false; // trava contra disparos concorrentes
   var ultimoTentado = null; // guarda contra laço infinito
 
+  /**
+   * Grava o progresso quando a página está sendo fechada.
+   *
+   * A gravação em lote abre uma janela de até 10 envios em que a memória está
+   * à frente do storage. Fechar a aba nesse intervalo perderia os resultados
+   * mais recentes. pagehide é o último momento confiável para gravar.
+   */
+  function instalarSalvamentoAoSair() {
+    if (typeof window === "undefined") return;
+
+    var aoSair = function () {
+      if (!campanha || naoSalvos === 0) return;
+      naoSalvos = 0;
+      // set() durante o unload: o serviço de storage aceita a chamada porque
+      // ela é enfileirada no processo do navegador, não na página
+      try {
+        var obj = {};
+        campanha.atualizadaEm = new Date().toISOString();
+        obj[PREFIXO_CAMPANHA + campanha.id] = campanha;
+        chrome.storage.local.set(obj);
+      } catch (e) {}
+    };
+
+    window.addEventListener("pagehide", aoSair);
+    window.addEventListener("beforeunload", aoSair);
+  }
+
   /** Faixa vermelha quando a última gravação falhou. */
   /** Explica o que aconteceu com uma campanha interrompida. */
   function anunciarRetomada(c) {
@@ -520,6 +547,13 @@
               return;
             }
             C.marcarParte(contato, parte.chave, C.ITEM.ENVIADO);
+
+            // Libera o dataURL da memória. O arquivo continua no storage, então
+            // uma nova tentativa simplesmente o relê. Sem isto, uma campanha
+            // com 50 áudios de 2 MB deixava 100 MB presos na aba até fechá-la.
+            if (parte.tipo !== "texto" && parte.arquivo) {
+              delete midiasCache[parte.arquivo.id];
+            }
           },
           function (e) {
             C.marcarParte(contato, parte.chave, C.ITEM.FALHOU, e && e.message);
@@ -902,7 +936,7 @@
     var stats = C.estatisticas(campanha);
     $("enviados-hoje").textContent = stats.enviadosHoje;
     $("limite-info").textContent = campanha.protecoes.limiteDiario
-      ? "de " + campanha.protecoes.limiteDiario + " permitidas hoje"
+      ? "de " + campanha.protecoes.limiteDiario + " permitidos hoje"
       : "(sem limite diário)";
 
     var rodando = campanha.status === "executando";
@@ -1520,6 +1554,7 @@
 
   function iniciarPagina() {
     ligarEventos();
+    instalarSalvamentoAoSair();
 
     ler([CHAVE_INDICE]).then(function (d) {
       ids = d[CHAVE_INDICE] || [];
@@ -1578,6 +1613,15 @@
     cancelar: cancelar,
     // exposto para diagnóstico e testes de falha de armazenamento
     salvarAgora: salvar,
+    // diagnóstico: carrega uma mídia e informa o tamanho do cache
+    carregarMidia: function (id) {
+      return lerMidia(id).then(function (d) {
+        return { carregada: !!d, cache: Object.keys(midiasCache).length };
+      });
+    },
+    tamanhoCacheMidias: function () {
+      return Object.keys(midiasCache).length;
+    },
     estadoSalvamento: function () {
       return { falhou: falhaSalvamento, preparando: preparando };
     },
