@@ -104,6 +104,8 @@
     obj[PREFIXO_CAMPANHA + campanha.id] = campanha;
     obj[CHAVE_INDICE] = ids;
 
+    marcarSalvar("salvando");
+
     return gravar(obj).then(
       function () {
         // limpa o aviso de erro: sem isto a faixa vermelha ficava na tela
@@ -112,12 +114,14 @@
           falhaSalvamento = false;
           renderizarAvisoSalvamento();
         }
+        marcarSalvar("salvo");
         renderizarSeletor();
       },
       function (erro) {
         // não deixa a interface mentir: marca que o estado em memória está
         // à frente do que foi persistido
         falhaSalvamento = true;
+        marcarSalvar("falhou");
         log("ERRO ao salvar: " + erro.message, "erro");
         renderizarAvisoSalvamento();
         throw erro;
@@ -327,6 +331,45 @@
     });
   }
 
+  /** Extensões e MIME aceitos por tipo de pasta. */
+  var TIPOS_MIDIA = {
+    audio: {
+      accept: "audio/*",
+      mimes: /^audio\//,
+      ext: /\.(ogg|opus|mp3|m4a|aac|wav|oga|weba|flac)$/i,
+      rotulo: "áudio",
+    },
+    imagem: {
+      accept: "image/*",
+      mimes: /^image\//,
+      ext: /\.(png|jpe?g|gif|webp|bmp|avif)$/i,
+      rotulo: "imagem",
+    },
+    documento: {
+      accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip",
+      mimes: /^(application\/(pdf|msword|vnd\.|zip|text\/)|text\/plain)/,
+      ext: /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip)$/i,
+      rotulo: "documento",
+    },
+  };
+
+  /**
+   * O arquivo combina com o tipo da pasta?
+   *
+   * O atributo accept do <input> é só um filtro visual: o usuário pode
+   * escolher "todos os arquivos" e mandar qualquer coisa. Validamos o tipo
+   * real aqui.
+   */
+  function arquivoCompativel(arquivo, tipoPasta) {
+    var regra = TIPOS_MIDIA[tipoPasta];
+    if (!regra) return true;
+
+    var mime = String(arquivo.type || "");
+    if (mime && regra.mimes.test(mime)) return true;
+    // alguns sistemas não informam MIME; cai na extensão
+    return regra.ext.test(arquivo.name || "");
+  }
+
   function lerMidia(itemId) {
     if (midiasCache[itemId]) return Promise.resolve(midiasCache[itemId]);
     var chave = PREFIXO_MIDIA + itemId;
@@ -393,6 +436,54 @@
   var ultimoSalvamento = 0;
   var falhaSalvamento = false;
   var preparando = false; // trava contra disparos concorrentes
+
+  /**
+   * Estamos no meio de uma operação?
+   *
+   * Cobre a preparação (verificação do WhatsApp, antes de a campanha virar
+   * "executando") e a execução em si. Enquanto isto for verdade, trocar de
+   * campanha, criar outra ou mexer na fila perderia o controle do que está
+   * em andamento.
+   */
+  function emOperacao() {
+    return preparando || (!!campanha && campanha.status === C.STATUS.EXECUTANDO);
+  }
+
+  /** Motivo legível para bloquear uma ação, ou null se pode. */
+  function motivoBloqueio(acao) {
+    if (preparando) {
+      return "Aguarde: o disparo está sendo preparado. Não é possível " + acao + " agora.";
+    }
+    if (campanha && campanha.status === C.STATUS.EXECUTANDO) {
+      return "O disparo está em andamento. Pause ou cancele antes de " + acao + ".";
+    }
+    return null;
+  }
+
+  /** Aplica bloqueio visual + textual num controle. */
+  function aplicarBloqueio(el, acao) {
+    if (!el) return;
+    var motivo = motivoBloqueio(acao);
+    el.disabled = !!motivo;
+    el.setAttribute("aria-disabled", motivo ? "true" : "false");
+    if (motivo) {
+      el.title = motivo;
+      el.classList.add("bloqueado");
+    } else {
+      el.removeAttribute("title");
+      el.classList.remove("bloqueado");
+    }
+    return !motivo;
+  }
+
+  /** Recusa uma ação destrutiva durante a operação, explicando o motivo. */
+  function recusarSeEmOperacao(acao) {
+    var motivo = motivoBloqueio(acao);
+    if (!motivo) return false;
+    log(motivo, "erro");
+    alert(motivo);
+    return true;
+  }
   var ultimoTentado = null; // guarda contra laço infinito
 
   /**
@@ -420,6 +511,42 @@
 
     window.addEventListener("pagehide", aoSair);
     window.addEventListener("beforeunload", aoSair);
+  }
+
+  /* --- indicador de persistência --------------------------------------- */
+  //
+  // O usuário precisa saber quando uma alteração está a caminho do disco.
+  // Três estados: pendente, salvando, salvo. Nunca dizemos "salvo" antes de
+  // o chrome.storage confirmar.
+
+  var estadoSalvar = "salvo"; // pendente | salvando | salvo | falhou
+  var salvoEm = null;
+
+  function marcarSalvar(novo) {
+    estadoSalvar = novo;
+    if (novo === "salvo") salvoEm = new Date();
+    renderizarIndicadorSalvar();
+  }
+
+  function renderizarIndicadorSalvar() {
+    var el = $("estado-salvar");
+    if (!el) return;
+
+    var mapa = {
+      pendente: ["pendente", "Alterações não salvas", "pendente"],
+      salvando: ["salvando", "Salvando…", "salvando"],
+      salvo: [
+        "salvo",
+        salvoEm ? "Salvo às " + salvoEm.toLocaleTimeString("pt-BR") : "Salvo",
+        "salvo",
+      ],
+      falhou: ["falhou", "Não foi possível salvar", "falhou"],
+    };
+
+    var dado = mapa[estadoSalvar] || mapa.salvo;
+    el.setAttribute("data-estado", dado[2]);
+    el.textContent = dado[1];
+    el.setAttribute("aria-live", "polite");
   }
 
   /** Faixa vermelha quando a última gravação falhou. */
@@ -475,6 +602,7 @@
 
   function salvarEmLote(forcar) {
     naoSalvos++;
+    if (!falhaSalvamento) marcarSalvar("pendente");
     var agora = Date.now();
     if (forcar || naoSalvos >= 10 || agora - ultimoSalvamento > 15000) {
       naoSalvos = 0;
@@ -860,56 +988,209 @@
     });
   }
 
+  /* --- tabela: atualização incremental -------------------------------- */
+  //
+  // Antes, cada renderização apagava o <tbody> inteiro e recriava todas as
+  // linhas. Com 3.000 contatos isso é ~24 mil nós por envio, várias vezes por
+  // minuto — o navegador engasga e o clique demora a responder.
+  //
+  // Agora as linhas são reaproveitadas: guardamos o <tr> de cada contato por
+  // id e só reescrevemos o que mudou. A rolagem e o foco não se perdem.
+
+  var LINHAS_POR_PAGINA = 200;
+  var linhasVisiveis = LINHAS_POR_PAGINA;
+
+  var linhasPorId = Object.create(null); // id do contato -> { tr, assinatura }
+  var ordemDesenhada = []; // ids na ordem atual do DOM
+
+  function assinaturaContato(c) {
+    return [c.status, c.enviadoEm || "", c.erro || "", c.numero, emOperacao() ? "op" : "-"].join(
+      "\u0001"
+    );
+  }
+
+  function celulaStatus(c) {
+    var tag = document.createElement("span");
+    tag.className = "status-tag st-" + c.status;
+    tag.textContent = rotuloStatus(c.status);
+    return tag;
+  }
+
+  function rotuloStatus(status) {
+    return (
+      {
+        pendente: "na fila",
+        enviando: "enviando",
+        enviado: "enviado",
+        falhou: "falhou",
+        pulado: "pulado",
+        desconhecido: "sem confirmação",
+      }[status] || status
+    );
+  }
+
+  /** Cria a linha uma única vez. */
+  function criarLinha(c, indice) {
+    var tr = document.createElement("tr");
+    tr.setAttribute("data-contato", c.id);
+
+    var tdNum = document.createElement("td");
+    tdNum.className = "col-numero";
+
+    var tdTel = document.createElement("td");
+    tdTel.textContent = c.numero;
+
+    var tdStatus = document.createElement("td");
+
+    var tdData = document.createElement("td");
+    tdData.className = "col-data";
+
+    var tdErro = document.createElement("td");
+    tdErro.className = "col-erro";
+
+    var tdAcao = document.createElement("td");
+    tdAcao.className = "col-acao";
+
+    [tdNum, tdTel, tdStatus, tdData, tdErro, tdAcao].forEach(function (td) {
+      tr.appendChild(td);
+    });
+
+    return {
+      tr: tr,
+      tdNum: tdNum,
+      tdStatus: tdStatus,
+      tdData: tdData,
+      tdErro: tdErro,
+      tdAcao: tdAcao,
+      assinatura: null,
+    };
+  }
+
+  /** Atualiza só o que mudou naquela linha. */
+  function atualizarLinha(reg, c, indice) {
+    var assinatura = assinaturaContato(c);
+    if (reg.assinatura === assinatura) return false;
+
+    reg.tdNum.textContent = String(indice + 1);
+
+    reg.tdStatus.innerHTML = "";
+    reg.tdStatus.appendChild(celulaStatus(c));
+
+    reg.tdData.textContent = c.enviadoEm
+      ? new Date(c.enviadoEm).toLocaleString("pt-BR")
+      : "—";
+
+    reg.tdErro.textContent = c.erro || "—";
+    reg.tdErro.title = c.erro || "";
+
+    // ação só existe para quem ainda pode sair da fila E fora de execução
+    reg.tdAcao.innerHTML = "";
+    if (!emOperacao() && (c.status === "pendente" || c.status === "falhou")) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-sec btn-pequeno";
+      btn.textContent = "Remover";
+      btn.setAttribute("aria-label", "Remover " + c.numero + " da fila");
+      btn.onclick = function () {
+        if (recusarSeEmOperacao("remover contatos da fila")) return;
+        var n = C.removerPendentes(campanha, [c.numero]);
+        if (n) {
+          log("Removido da fila: " + c.numero, "info");
+          renderizar();
+          salvar();
+        }
+      };
+      reg.tdAcao.appendChild(btn);
+    }
+
+    reg.assinatura = assinatura;
+    return true;
+  }
+
   function renderizarTabela() {
     var corpo = $("corpo-tabela");
     if (!corpo) return;
-    corpo.innerHTML = "";
-    if (!campanha) return;
 
-    campanha.contatos.forEach(function (c) {
-      var tr = document.createElement("tr");
+    if (!campanha || !campanha.contatos.length) {
+      linhasPorId = Object.create(null);
+      ordemDesenhada = [];
+      corpo.innerHTML = "";
 
-      var tds = [
-        String(c.indice + 1),
-        c.numero,
-        null, // status (com tag)
-        c.enviadoEm ? new Date(c.enviadoEm).toLocaleString("pt-BR") : "—",
-        c.erro || "—",
-      ];
+      var vazio = document.createElement("tr");
+      vazio.className = "linha-vazia";
+      var td = document.createElement("td");
+      td.colSpan = 6;
+      td.innerHTML =
+        '<div class="estado-vazio">' +
+        "<b>Nenhum contato ainda</b>" +
+        "<span>Cole os números na seção 1 para começar. " +
+        "Cada número vira uma linha aqui, com o resultado do envio.</span>" +
+        "</div>";
+      vazio.appendChild(td);
+      corpo.appendChild(vazio);
+      atualizarBotaoMais();
+      return;
+    }
 
-      tds.forEach(function (valor, i) {
-        var td = document.createElement("td");
-        if (i === 2) {
-          var tag = document.createElement("span");
-          tag.className = "status-tag st-" + c.status;
-          tag.textContent = c.status;
-          td.appendChild(tag);
-        } else {
-          td.textContent = valor;
-        }
-        tr.appendChild(td);
-      });
+    var contatos = campanha.contatos;
+    var limite = Math.min(contatos.length, linhasVisiveis);
 
-      var tdAcao = document.createElement("td");
-      if (c.status === "pendente" || c.status === "falhou") {
-        var btn = document.createElement("button");
-        btn.className = "btn btn-sec btn-pequeno";
-        btn.textContent = "Remover";
-        btn.onclick = function () {
-          var n = C.removerPendentes(campanha, [c.numero]);
-          if (n) {
-            log("Removido da fila: " + c.numero, "info");
-            renderizarTabela();
-            renderizar();
-            salvar();
-          }
-        };
-        tdAcao.appendChild(btn);
+    // remove a linha de "vazio" se existir
+    var vazia = corpo.querySelector(".linha-vazia");
+    if (vazia) vazia.remove();
+
+    var fragmento = document.createDocumentFragment();
+    var vistos = Object.create(null);
+
+    for (var i = 0; i < limite; i++) {
+      var c = contatos[i];
+      var reg = linhasPorId[c.id];
+
+      if (!reg) {
+        reg = criarLinha(c, i);
+        linhasPorId[c.id] = reg;
       }
-      tr.appendChild(tdAcao);
 
-      corpo.appendChild(tr);
+      atualizarLinha(reg, c, i);
+      vistos[c.id] = true;
+
+      // só mexe no DOM se a posição mudou
+      if (corpo.children[i] !== reg.tr) fragmento.appendChild(reg.tr);
+    }
+
+    if (fragmento.childNodes.length) corpo.appendChild(fragmento);
+
+    // descarta linhas de contatos que não existem mais
+    Object.keys(linhasPorId).forEach(function (id) {
+      if (!vistos[id]) {
+        var reg = linhasPorId[id];
+        if (reg.tr.parentNode) reg.tr.parentNode.removeChild(reg.tr);
+        delete linhasPorId[id];
+      }
     });
+
+    atualizarBotaoMais();
+  }
+
+  /** Mostra/oculta o botão "mostrar mais" conforme o tamanho da lista. */
+  function atualizarBotaoMais() {
+    var btn = $("btn-mais-linhas");
+    if (!btn) return;
+
+    var total = campanha ? campanha.contatos.length : 0;
+    var restantes = total - linhasVisiveis;
+
+    if (restantes > 0) {
+      btn.classList.remove("oculto");
+      btn.textContent =
+        "Mostrar mais " +
+        Math.min(LINHAS_POR_PAGINA, restantes) +
+        " (faltam " +
+        restantes +
+        ")";
+    } else {
+      btn.classList.add("oculto");
+    }
   }
 
   function renderizarProgresso() {
@@ -917,21 +1198,82 @@
 
     var p = C.progresso(campanha);
     $("progresso-barra").style.width = p.percentual + "%";
+    var barra = $("progresso-barra");
+    if (barra && barra.parentElement) {
+      barra.parentElement.setAttribute("role", "progressbar");
+      barra.parentElement.setAttribute("aria-valuemin", "0");
+      barra.parentElement.setAttribute("aria-valuemax", "100");
+      barra.parentElement.setAttribute("aria-valuenow", String(p.percentual));
+      barra.parentElement.setAttribute(
+        "aria-valuetext",
+        p.processados + " de " + p.total + " contatos processados"
+      );
+      barra.parentElement.setAttribute("aria-label", "Progresso do disparo");
+    }
     $("progresso-percentual").textContent = p.percentual + "%";
     $("c-enviados").textContent = p.enviados;
     $("c-falhas").textContent = p.falharam;
     $("c-pendentes").textContent = p.pendentes;
     $("c-total").textContent = p.total;
 
-    var rotulo = {
-      rascunho: "Aguardando início",
-      executando: "Enviando…",
-      pausada: "Pausado",
-      finalizada: "Finalizada",
-      cancelada: "Cancelada",
-    }[campanha.status];
+    // Estado principal: precisa cobrir preparação, interrupção e operações
+    // sem confirmação — não só "executando".
+    var ambiguos = campanha.contatos.filter(function (c) {
+      return c.status === C.ITEM.DESCONHECIDO;
+    }).length;
 
-    $("progresso-texto").textContent = rotulo + " — " + p.processados + " de " + p.total;
+    var estado;
+    if (preparando) {
+      estado = { chave: "preparando", texto: "Preparando disparo…" };
+    } else if (campanha.status === "executando") {
+      estado = { chave: "executando", texto: "Enviando" };
+    } else if (campanha.status === "pausada") {
+      estado = { chave: "pausada", texto: "Pausado" };
+    } else if (campanha.status === "finalizada") {
+      estado = { chave: "finalizada", texto: "Finalizada" };
+    } else if (campanha.status === "cancelada") {
+      estado = { chave: "cancelada", texto: "Cancelada" };
+    } else {
+      estado = { chave: "rascunho", texto: "Aguardando início" };
+    }
+
+    var selo = $("estado-execucao");
+    if (selo) {
+      selo.setAttribute("data-estado", estado.chave);
+      selo.textContent = estado.texto;
+    }
+
+    $("progresso-texto").textContent =
+      estado.texto + " — " + p.processados + " de " + p.total + " contatos";
+
+    // faixa de atenção: só aparece quando há algo exigindo decisão
+    var atencao = $("aviso-atencao");
+    if (atencao) {
+      var avisos = [];
+      if (ambiguos) {
+        avisos.push(
+          ambiguos +
+            (ambiguos === 1
+              ? " contato ficou sem confirmação de envio"
+              : " contatos ficaram sem confirmação de envio") +
+            ". Confira no WhatsApp antes de reprocessar — reenviar pode duplicar."
+        );
+      }
+      if (campanha.interrompida) {
+        avisos.push("A execução anterior foi interrompida (a página foi fechada).");
+      }
+      if (falhaSalvamento) {
+        avisos.push("As últimas alterações não foram salvas.");
+      }
+
+      atencao.classList.toggle("oculto", !avisos.length);
+      atencao.innerHTML = "";
+      avisos.forEach(function (a) {
+        var p = document.createElement("p");
+        p.textContent = a;
+        atencao.appendChild(p);
+      });
+    }
 
     var stats = C.estatisticas(campanha);
     $("enviados-hoje").textContent = stats.enviadosHoje;
@@ -964,8 +1306,25 @@
     var ms = C.duracaoEstimada(plano);
     var min = Math.round(ms / 60000);
 
-    var texto = min < 60 ? min + " minutos" : (min / 60).toFixed(1) + " horas";
-    $("estimativa").textContent = texto + " para " + pendentes + " mensagens";
+    // quantas partes cada contato vai receber, de fato
+    var umaAmostra = C.montarEnvio(campanha, campanha.contatos.filter(function (c) {
+      return c.status === "pendente";
+    })[0]);
+    var partesPorContato = umaAmostra.length || 1;
+
+    var duracao = min < 60 ? min + " minutos" : (min / 60).toFixed(1) + " horas";
+    var texto = "≈ " + duracao + " para " + pendentes + " contatos";
+
+    if (partesPorContato > 1) {
+      texto += " (" + pendentes * partesPorContato + " arquivos/mensagens no total)";
+    }
+
+    $("estimativa").textContent = texto;
+    $("estimativa").setAttribute(
+      "title",
+      "Estimativa aproximada: considera o intervalo entre contatos, os lotes e " +
+        "as pausas. O tempo real varia com a velocidade do WhatsApp."
+    );
   }
 
   function renderizarFormulario() {
@@ -974,9 +1333,7 @@
     $("nome").value = campanha.nome || "";
 
     // modo de texto
-    document.querySelectorAll(".seg").forEach(function (b) {
-      b.classList.toggle("ativo", b.dataset.modo === campanha.texto.modo);
-    });
+    sincronizarAbas(campanha.texto.modo);
     $("painel-fixo").classList.toggle("oculto", campanha.texto.modo !== "fixo");
     $("painel-spintax").classList.toggle("oculto", campanha.texto.modo !== "spintax");
     $("painel-rotacao").classList.toggle("oculto", campanha.texto.modo !== "rotacao");
@@ -1115,8 +1472,57 @@
         tipo.appendChild(o);
       });
       tipo.onchange = function () {
+        var tipoAnterior = pasta.tipo;
         pasta.tipo = tipo.value;
+
+        // O filtro do seletor precisa acompanhar o novo tipo: sem isto o
+        // usuário mudava de áudio para imagem e a janela continuava
+        // filtrando por áudio.
+        if (pasta._sincronizarAccept) pasta._sincronizarAccept();
+
         salvarComDebounce();
+
+        // Arquivos que já estavam na pasta podem não servir mais.
+        // Nada é apagado sem o usuário decidir.
+        if (tipoAnterior !== pasta.tipo) {
+          var incompatíveis = (pasta.itens || []).filter(function (it) {
+            return it.tipo && it.tipo !== pasta.tipo;
+          });
+
+          if (incompatíveis.length) {
+            renderizarPastas();
+            var nomes = incompatíveis.map(function (i) {
+              return i.nome;
+            });
+            var confirmouRemocao = confirm(
+              "Esta pasta agora é de " +
+                (TIPOS_MIDIA[pasta.tipo] || {}).rotulo +
+                ", mas " +
+                incompatíveis.length +
+                " arquivo(s) foram adicionados como " +
+                (TIPOS_MIDIA[incompatíveis[0].tipo] || {}).rotulo +
+                ":\n\n" +
+                nomes.join("\n") +
+                "\n\nEles continuam salvos. Remover da pasta?"
+            );
+            if (confirmouRemocao) {
+              var chaves = incompatíveis.map(function (it) {
+                delete midiasCache[it.id];
+                return PREFIXO_MIDIA + it.id;
+              });
+              pasta.itens = pasta.itens.filter(function (it) {
+                return it.tipo === pasta.tipo;
+              });
+              remover(chaves).then(function () {
+                renderizarPastas();
+                salvar();
+              });
+              log(incompatíveis.length + " arquivo(s) incompatíveis removidos.", "info");
+            }
+          } else {
+            renderizarPastas();
+          }
+        }
       };
 
       var rem = document.createElement("button");
@@ -1149,25 +1555,112 @@
       input.type = "file";
       input.multiple = true;
       input.className = "oculto";
-      input.accept = pasta.tipo === "audio" ? "audio/*" : pasta.tipo === "imagem" ? "image/*" : "";
+
+      /** Sincroniza o filtro do seletor com o tipo ATUAL da pasta. */
+      function sincronizarAccept() {
+        var regra = TIPOS_MIDIA[pasta.tipo];
+        input.accept = regra ? regra.accept : "";
+        input.setAttribute(
+          "aria-label",
+          "Escolher " + (regra ? regra.rotulo : "arquivo") + " para a pasta " + pasta.nome
+        );
+      }
+      sincronizarAccept();
+
+      // mantém o filtro alinhado quando o tipo muda
+      pasta._sincronizarAccept = sincronizarAccept;
+
       input.onchange = function () {
         var arquivos = Array.prototype.slice.call(input.files || []);
+        input.value = ""; // permite reescolher o mesmo arquivo
         if (!arquivos.length) return;
-        Promise.all(
-          arquivos.map(function (f) {
-            var id = novoId("m-");
-            return arquivoParaDataUrl(f).then(function (dataUrl) {
-              midiasCache[id] = dataUrl;
-              var obj = {};
-              obj[PREFIXO_MIDIA + id] = dataUrl;
-              return gravar(obj).then(function () {
-                pasta.itens.push({ id: id, nome: f.name, tamanho: f.size, tipo: pasta.tipo });
+
+        var barra = document.createElement("div");
+        barra.className = "upload-progresso";
+        barra.textContent = "Enviando 0 de " + arquivos.length + "…";
+        chips.parentNode.insertBefore(barra, chips);
+
+        var adicionados = [];
+        var recusados = [];
+
+        // Cada arquivo é tratado individualmente: uma falha não descarta
+        // os que já foram gravados.
+        var cadeia = Promise.resolve();
+
+        arquivos.forEach(function (f, indice) {
+          cadeia = cadeia.then(function () {
+            barra.textContent =
+              "Enviando " + (indice + 1) + " de " + arquivos.length + "… (" + f.name + ")";
+
+            if (!arquivoCompativel(f, pasta.tipo)) {
+              recusados.push({
+                nome: f.name,
+                motivo: "não é " + (TIPOS_MIDIA[pasta.tipo] || {}).rotulo,
               });
-            });
-          })
-        ).then(function () {
+              return;
+            }
+            if (!f.size) {
+              recusados.push({ nome: f.name, motivo: "arquivo vazio" });
+              return;
+            }
+
+            var id = novoId("m-");
+            return arquivoParaDataUrl(f).then(
+              function (dataUrl) {
+                if (!dataUrl) throw new Error("não foi possível ler o arquivo");
+                var obj = {};
+                obj[PREFIXO_MIDIA + id] = dataUrl;
+                return gravar(obj).then(function () {
+                  // só entra no cache e na lista depois de gravar com sucesso
+                  midiasCache[id] = dataUrl;
+                  pasta.itens.push({
+                    id: id,
+                    nome: f.name,
+                    tamanho: f.size,
+                    tipo: pasta.tipo,
+                  });
+                  adicionados.push(f.name);
+                });
+              },
+              function (erro) {
+                recusados.push({ nome: f.name, motivo: erro.message || "falha ao ler" });
+              }
+            );
+          });
+        });
+
+        cadeia.then(function () {
+          barra.remove();
           renderizarPastas();
-          salvar();
+          if (adicionados.length) salvar();
+
+          if (adicionados.length) {
+            log(
+              adicionados.length +
+                " arquivo(s) adicionado(s) em “" +
+                pasta.nome +
+                "”: " +
+                adicionados.join(", "),
+              "ok"
+            );
+          }
+          if (recusados.length) {
+            var detalhe = recusados
+              .map(function (r) {
+                return r.nome + " (" + r.motivo + ")";
+              })
+              .join("; ");
+            log(
+              recusados.length + " arquivo(s) NÃO adicionado(s): " + detalhe,
+              "erro"
+            );
+            alert(
+              recusados.length +
+                " arquivo(s) não foram adicionados:\n\n" +
+                detalhe +
+                "\n\nOs demais foram salvos normalmente."
+            );
+          }
         });
       };
 
@@ -1230,6 +1723,42 @@
   /* ==========================================================================
    * LIGAÇÕES DE EVENTOS
    * ======================================================================== */
+
+  /** Teclado nas abas: setas movem, Home/End vão às pontas. */
+  function ligarTecladoAbas() {
+    var abas = Array.prototype.slice.call(
+      document.querySelectorAll(".segmentado [role='tab']")
+    );
+    if (!abas.length) return;
+
+    abas.forEach(function (aba, i) {
+      aba.addEventListener("keydown", function (ev) {
+        var alvo = null;
+        if (ev.key === "ArrowRight") alvo = abas[(i + 1) % abas.length];
+        else if (ev.key === "ArrowLeft") alvo = abas[(i - 1 + abas.length) % abas.length];
+        else if (ev.key === "Home") alvo = abas[0];
+        else if (ev.key === "End") alvo = abas[abas.length - 1];
+
+        if (!alvo) return;
+        ev.preventDefault();
+        alvo.click();
+        alvo.focus();
+      });
+    });
+  }
+
+  /** Mantém aria-selected e tabindex coerentes com o modo ativo. */
+  function sincronizarAbas(modoAtivo) {
+    Array.prototype.forEach.call(
+      document.querySelectorAll(".segmentado [role='tab']"),
+      function (aba) {
+        var ativo = aba.getAttribute("data-modo") === modoAtivo;
+        aba.setAttribute("aria-selected", ativo ? "true" : "false");
+        aba.setAttribute("tabindex", ativo ? "0" : "-1");
+        aba.classList.toggle("ativo", ativo);
+      }
+    );
+  }
 
   function ligarEventos() {
     $("nome").oninput = function () {
@@ -1349,7 +1878,16 @@
       }, 5000);
     };
 
+    var mais = $("btn-mais-linhas");
+    if (mais) {
+      mais.onclick = function () {
+        linhasVisiveis += LINHAS_POR_PAGINA;
+        renderizarTabela();
+      };
+    }
+
     $("btn-reproc").onclick = function () {
+      if (recusarSeEmOperacao("reprocessar falhas")) return;
       var n = C.reprocessarFalhas(campanha);
       if (!n) {
         alert("Não há falhas para reprocessar.");
@@ -1361,6 +1899,7 @@
     };
 
     $("btn-limpar-pendentes").onclick = function () {
+      if (recusarSeEmOperacao("remover contatos da fila")) return;
       var pendentes = campanha.contatos.filter(function (c) {
         return c.status === "pendente" || c.status === "falhou";
       }).length;
@@ -1376,6 +1915,7 @@
     };
 
     $("btn-nova").onclick = function () {
+      if (recusarSeEmOperacao("criar outra campanha")) return;
       if (campanha && campanha.contatos.length) {
         if (!confirm("Criar uma campanha nova? A atual fica salva na lista.")) return;
       }
@@ -1384,6 +1924,7 @@
 
     $("btn-excluir").onclick = function () {
       if (!campanha) return;
+      if (recusarSeEmOperacao("excluir a campanha")) return;
       if (!confirm("Excluir a campanha “" + campanha.nome + "”?")) return;
       var chaves = [PREFIXO_CAMPANHA + campanha.id];
       (campanha.pastas || []).forEach(function (p) {
@@ -1402,11 +1943,20 @@
 
     $("sel-campanha").onchange = function () {
       var id = this.value;
+
+      // trocar de campanha no meio de uma execução abandonaria o laço ativo
+      if (id !== (campanha && campanha.id) && recusarSeEmOperacao("trocar de campanha")) {
+        this.value = campanha ? campanha.id : "";
+        return;
+      }
       if (!id) return;
+
       carregar(id).then(function (c) {
         if (!c) return;
         campanha = c;
         execucao = null;
+        linhasVisiveis = LINHAS_POR_PAGINA;
+        linhasPorId = Object.create(null);
         $("log").innerHTML = "";
         renderizarFormulario();
         $("lista").value = c.contatos
@@ -1535,6 +2085,8 @@
 
   function criarNova() {
     campanha = novaCampanha();
+    linhasVisiveis = LINHAS_POR_PAGINA;
+    linhasPorId = Object.create(null);
     ids.push(campanha.id);
     $("lista").value = "";
     $("log").innerHTML = "";
@@ -1554,6 +2106,8 @@
 
   function iniciarPagina() {
     ligarEventos();
+    ligarTecladoAbas();
+    renderizarIndicadorSalvar();
     instalarSalvamentoAoSair();
 
     ler([CHAVE_INDICE]).then(function (d) {
@@ -1619,9 +2173,16 @@
         return { carregada: !!d, cache: Object.keys(midiasCache).length };
       });
     },
+    // usado pelos testes de tipo de arquivo
+    compativel: function (arquivo, tipoPasta) {
+      return arquivoCompativel(arquivo, tipoPasta);
+    },
     tamanhoCacheMidias: function () {
       return Object.keys(midiasCache).length;
     },
+    // usado pelo medidor de desempenho da tabela
+    renderizarTabela: renderizarTabela,
+    renderizar: renderizar,
     estadoSalvamento: function () {
       return { falhou: falhaSalvamento, preparando: preparando };
     },

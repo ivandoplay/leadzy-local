@@ -166,18 +166,25 @@ automatizada aqui — e é a única parte que pode quebrar sozinha, por mudança
 
 ## 5. Suíte de testes
 
-**258 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~7 min)
+**287 testes, 0 pulados, 0 falhando.** `cd tests && ./run-all.sh` (~13 min)
 
 | Camada | Testes |
 |---|---|
-| Unitários | 151 |
+| Unitários | 154 |
 | End-to-end (Chromium real) | 16 |
 | Links externos (allowlist + DNR) | 8 |
-| Cobertura de rotas de API | 7 |
-| **Disparo em massa** | **17** | WhatsApp Web simulado com o mesmo protocolo do wapi |
+| Cobertura de rotas de API | 9 |
+| **Disparo em massa** (WhatsApp Web simulado com o mesmo protocolo do wapi) | **17** |
 | Fluxos | 5 |
 | Backup / restauração | 3 |
 | Content script | 7 |
 | Diferencial vs. original | 3 |
 | Auditoria de botões | 11 |
 | Service worker + DNS morto | 7 |
+| Jornada de instalação | 9 |
+| **Achados da auditoria** (fila travada, tabela incremental, onboarding comprovado, mídia, ARIA) | **26** |
+| Integridade do estado | 12 |
+| **Total** | **287** |
+
+Os detalhes de cada achado, incluindo o antes × depois da tabela, estão em
+`AUDITORIA-PROMPT.md`.

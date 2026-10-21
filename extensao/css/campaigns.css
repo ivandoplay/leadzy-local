@@ -404,3 +404,247 @@ tbody tr:last-child td { border-bottom: 0; }
   font-size: 13px;
   margin: 12px 0;
 }
+
+/* ==========================================================================
+   MELHORIAS DE UI — acessibilidade, estados e responsividade
+   ========================================================================== */
+
+/* título principal da página */
+.titulo-pagina {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: inherit;
+}
+
+/* --- foco visível em tudo que é interativo ----------------------------- */
+.campaigns :focus-visible,
+.campaigns button:focus-visible,
+.campaigns input:focus-visible,
+.campaigns select:focus-visible,
+.campaigns textarea:focus-visible,
+.campaigns summary:focus-visible {
+  outline: 2px solid #dc0a6b;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* o switch esconde o checkbox: o foco tem de aparecer no elemento visível */
+.switch-linha input:focus-visible + .switch {
+  outline: 2px solid #dc0a6b;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(220, 10, 107, 0.18);
+}
+
+/* botão desabilitado precisa parecer desabilitado e não responder */
+.btn:disabled,
+.btn.bloqueado {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto; /* ainda mostra o title com o motivo */
+}
+
+/* --- selos de estado --------------------------------------------------- */
+.linha-estado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.selo-estado,
+.selo-salvar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.selo-estado::before,
+.selo-salvar::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.selo-estado[data-estado="rascunho"] {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+.selo-estado[data-estado="preparando"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+.selo-estado[data-estado="executando"] {
+  background: #dcfce7;
+  color: #15803d;
+}
+.selo-estado[data-estado="pausada"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+.selo-estado[data-estado="finalizada"] {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.selo-estado[data-estado="cancelada"] {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.selo-salvar {
+  margin-left: auto;
+  font-weight: 500;
+  background: #f9fafb;
+  color: #6b7280;
+}
+.selo-salvar[data-estado="pendente"] {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.selo-salvar[data-estado="salvando"] {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.selo-salvar[data-estado="salvo"] {
+  background: #f0fdf4;
+  color: #15803d;
+}
+.selo-salvar[data-estado="falhou"] {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+/* --- faixa de atenção -------------------------------------------------- */
+.aviso-atencao {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.aviso-atencao p {
+  margin: 0 0 6px;
+}
+.aviso-atencao p:last-child {
+  margin-bottom: 0;
+}
+
+/* --- estado vazio da tabela ------------------------------------------- */
+.estado-vazio {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 26px 16px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.estado-vazio b {
+  color: #374151;
+  font-size: 14px;
+}
+
+.linha-vazia td {
+  border-bottom: none;
+}
+
+/* --- progresso do upload ---------------------------------------------- */
+.upload-progresso {
+  font-size: 12px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 8px;
+}
+
+/* aviso dentro da seção de variação de texto */
+.dica-aviso {
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: #78350f;
+}
+
+/* --- tabela: colunas estáveis ----------------------------------------- */
+#tabela-contatos {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#tabela-contatos .col-numero {
+  width: 48px;
+  color: #9ca3af;
+}
+
+#tabela-contatos .col-data {
+  width: 150px;
+  white-space: nowrap;
+}
+
+#tabela-contatos .col-erro {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#tabela-contatos .col-acao {
+  width: 96px;
+}
+
+/* --- responsividade ---------------------------------------------------- */
+@media (max-width: 980px) {
+  .grade-2 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .topo {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .topo-acoes {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .topo-acoes select {
+    flex: 1 1 100%;
+  }
+
+  .contadores {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .acoes-execucao {
+    flex-wrap: wrap;
+  }
+
+  .acoes-execucao .btn {
+    flex: 1 1 auto;
+  }
+
+  /* a tabela rola sozinha, sem empurrar a página */
+  .tabela-wrap {
+    overflow-x: auto;
+  }
+
+  #tabela-contatos {
+    min-width: 560px;
+  }
+}

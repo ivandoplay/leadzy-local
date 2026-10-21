@@ -416,7 +416,7 @@ test("falha é registrada com erro e pode ser reprocessada", () => {
 
 test("remove da fila só quem ainda não recebeu", () => {
   const c = campanhaExemplo(4);
-  E.iniciar(c);
+  // fora de execução: a remoção é permitida
   E.marcarEnviando(c, 0);
   E.marcarEnviado(c, 0);
   E.marcarEnviando(c, 1);
@@ -887,4 +887,51 @@ test("contadores e progresso incluem o estado desconhecido", () => {
   assert.strictEqual(p.pendentes, 1);
   assert.strictEqual(p.processados, 3, "desconhecido conta como processado");
   assert.strictEqual(p.percentual, 75);
+});
+
+
+/* ===========================================================================
+ * POLÍTICA DA FILA (ACHADO 3)
+ * ======================================================================== */
+
+test("a fila não pode ser alterada durante a execução", () => {
+  const c = campanhaExemplo(4);
+  E.iniciar(c);
+
+  assert.strictEqual(E.podeAlterarFila(c), false);
+
+  const removidos = E.removerPendentes(c, [c.contatos[0].numero]);
+  assert.strictEqual(removidos, 0, "o motor precisa recusar por conta própria");
+  assert.strictEqual(c.contatos.length, 4, "ninguém pode ser removido");
+});
+
+test("a fila volta a aceitar alteração ao pausar, finalizar ou cancelar", () => {
+  const c = campanhaExemplo(3);
+
+  E.iniciar(c);
+  assert.strictEqual(E.podeAlterarFila(c), false);
+
+  E.pausar(c);
+  assert.strictEqual(E.podeAlterarFila(c), true, "pausado permite administrar a fila");
+
+  E.iniciar(c);
+  E.cancelar(c);
+  assert.strictEqual(E.podeAlterarFila(c), true);
+
+  E.iniciar(c);
+  E.finalizar(c);
+  assert.strictEqual(E.podeAlterarFila(c), true);
+});
+
+test("a remoção recusada não altera índices nem status", () => {
+  const c = campanhaExemplo(3);
+  E.iniciar(c);
+  E.marcarEnviando(c, 0);
+  E.marcarEnviado(c, 0);
+
+  const antes = c.contatos.map((x) => ({ id: x.id, indice: x.indice, status: x.status }));
+  E.removerPendentes(c, [c.contatos[1].numero]);
+  const depois = c.contatos.map((x) => ({ id: x.id, indice: x.indice, status: x.status }));
+
+  assert.deepStrictEqual(depois, antes);
 });

@@ -146,11 +146,15 @@ test("dashboard: criar uma campanha marca o passo como concluído", async () => 
       new Promise((r) => {
         chrome.storage.local.set(
           {
+            // campanha de verdade: contatos + mensagem. Só o registro vazio
+            // não conta mais (ver tests/e2e/achados.test.js, ACHADO 6).
             "campaigns:camp-teste": {
               id: "camp-teste",
               nome: "Minha campanha",
-              contatos: [],
               status: "rascunho",
+              contatos: [{ id: "k1", numero: "5511999990001", status: "pendente" }],
+              texto: { modo: "fixo", textoFixo: "olá" },
+              pastas: [],
             },
           },
           r

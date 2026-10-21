@@ -852,8 +852,24 @@
 
   /* --- edição durante a campanha --------------------------------------- */
 
+  /**
+   * A fila pode ser alterada agora?
+   *
+   * Política única para TODA ação que muda quem vai receber: remover contato,
+   * remover pendentes, reconstruir a lista. Durante a execução a resposta é
+   * sempre não — o índice e o plano de envio de um contato em trânsito
+   * dependem da fila como ela estava.
+   */
+  function podeAlterarFila(campanha) {
+    if (!campanha) return false;
+    return campanha.status !== STATUS.EXECUTANDO;
+  }
+
   /** Remove da fila tudo o que ainda não foi enviado. */
   function removerPendentes(campanha, numeros) {
+    // segunda barreira, independente da interface
+    if (!podeAlterarFila(campanha)) return 0;
+
     var alvo = null;
     if (numeros) {
       alvo = Object.create(null);
@@ -1197,6 +1213,7 @@
     removerPendentes: removerPendentes,
     editarConteudo: editarConteudo,
     reprocessarFalhas: reprocessarFalhas,
+    podeAlterarFila: podeAlterarFila,
     montarEnvio: montarEnvio,
     validar: validar,
     estatisticas: estatisticas,

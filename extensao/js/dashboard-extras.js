@@ -120,38 +120,169 @@
     },
   ];
 
+  /**
+   * Lê o estado REAL de cada etapa.
+   *
+   * Duas armadilhas que existiam aqui:
+   *  1. "existe aba do WhatsApp" não prova login — a aba pode estar no QR Code;
+   *  2. "existe chave de campanha" não prova campanha configurada — a própria
+   *     página de disparo cria um rascunho vazio ao abrir, o que marcava a
+   *     etapa como concluída antes de o usuário fazer qualquer coisa.
+   *
+   * Para o WhatsApp, perguntamos à própria aba se ela está conectada (mesma
+   * verificação usada antes de disparar). Para a campanha, exigimos conteúdo.
+   */
   function lerEstado() {
-    return new Promise(function (resolve) {
-      var estado = { wpp: false, campanha: false, mensagem: false };
+    var estado = { wpp: false, wppMotivo: "", campanha: false, mensagem: false };
 
+    var comAbas = new Promise(function (resolve) {
       try {
         chrome.tabs.query({}, function (abas) {
-          estado.wpp = (abas || []).some(function (a) {
-            // a URL é "https://web.whatsapp.com/..." — comparar o início com
-            // o domínio puro nunca casava
-            return (a.url || "").indexOf("https://web.whatsapp.com") !== -1;
-          });
-          resolve(estado);
+          resolve(abas || []);
         });
       } catch (e) {
-        resolve(estado);
+        resolve([]);
       }
-    }).then(function (estado) {
-      return new Promise(function (resolve) {
-        try {
-          chrome.storage.local.get(null, function (dados) {
-            var chaves = Object.keys(dados || {});
-            estado.campanha = chaves.some(function (k) {
-              return k.indexOf("campaigns:camp-") === 0;
-            });
-            var lista = dados && dados.messageList;
-            estado.mensagem = !!(lista && (Array.isArray(lista) ? lista.length : true));
-            resolve(estado);
-          });
-        } catch (e) {
-          resolve(estado);
+    });
+
+    return comAbas
+      .then(function (abas) {
+        var abasWpp = (abas || []).filter(function (a) {
+          return (a.url || "").indexOf("https://web.whatsapp.com") === 0 ||
+                 (a.url || "").indexOf("https://web.whatsapp.com") !== -1;
+        });
+
+        if (!abasWpp.length) {
+          estado.wppMotivo = "nenhuma aba do WhatsApp Web aberta";
+          return estado;
         }
+
+        // pergunta a cada aba se ela está de fato conectada
+        return perguntarAosWhatsApps(
+          abasWpp.map(function (a) {
+            return a.id;
+          })
+        ).then(function (r) {
+          estado.wpp = !!(r && r.conectado);
+          estado.wppMotivo = estado.wpp ? "" : (r && r.motivo) || "não conectado";
+          return estado;
+        });
+      })
+      .then(function (e1) {
+        var estadoFinal = e1;
+        return new Promise(function (resolve) {
+          try {
+            chrome.storage.local.get(null, function (dados) {
+              var d = dados || {};
+
+              // campanha só conta se tiver contatos E conteúdo para enviar
+              var chaves = Object.keys(d).filter(function (k) {
+                return k.indexOf("campaigns:camp-") === 0;
+              });
+              estadoFinal.campanha = chaves.some(function (k) {
+                var c = d[k];
+                if (!c || !Array.isArray(c.contatos) || !c.contatos.length) return false;
+
+                var temTexto = false;
+                try {
+                  temTexto = !!(
+                    c.texto &&
+                    ((c.texto.modo === "rotacao" &&
+                      (c.texto.rotacao || []).some(function (t) {
+                        return t && String(t).trim();
+                      })) ||
+                      (c.texto.textoFixo && String(c.texto.textoFixo).trim()))
+                  );
+                } catch (err) {}
+
+                var temMidia = (c.pastas || []).some(function (p) {
+                  return p && p.itens && p.itens.length;
+                });
+
+                return temTexto || temMidia;
+              });
+
+              var lista = d.messageList;
+              estadoFinal.mensagem = !!(
+                lista && (Array.isArray(lista) ? lista.length : true)
+              );
+
+              resolve(estadoFinal);
+            });
+          } catch (err) {
+            resolve(estadoFinal);
+          }
+        });
       });
+  }
+
+  /** Injeta a checagem na aba do WhatsApp e devolve o resultado. */
+  /**
+   * Pergunta a todas as abas do WhatsApp Web e combina as respostas.
+   *
+   * Uma conta conectada vale mesmo que outra aba esteja parada no QR Code,
+   * então "conectado" ganha de qualquer resposta negativa. Se nenhuma estiver
+   * pronta, o motivo mais explicativo é o que o usuário vê.
+   */
+  function perguntarAosWhatsApps(tabIds) {
+    var lista = (tabIds || []).slice(0, 6);
+    if (!lista.length) return Promise.resolve(null);
+
+    return Promise.all(lista.map(perguntarAoWhatsApp)).then(function (respostas) {
+      var validas = respostas.filter(Boolean);
+      if (!validas.length) return null;
+
+      var conectada = validas.filter(function (r) {
+        return r.conectado;
+      })[0];
+      if (conectada) return conectada;
+
+      var ordem = ["o WhatsApp está pedindo QR Code", "não conectado"];
+      for (var i = 0; i < ordem.length; i++) {
+        var achou = validas.filter(function (r) {
+          return r.motivo === ordem[i];
+        })[0];
+        if (achou) return achou;
+      }
+      return validas[0];
+    });
+  }
+
+  function perguntarAoWhatsApp(tabId) {
+    return new Promise(function (resolve) {
+      if (!chrome.scripting || !chrome.scripting.executeScript) return resolve(null);
+
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: tabId },
+          world: "MAIN",
+          func: function () {
+            var painel = document.querySelector("#pane-side");
+            var app = document.querySelector(".app-wrapper-web");
+            var qr =
+              document.querySelector("canvas[aria-label]") ||
+              document.querySelector("[data-ref]") ||
+              document.querySelector(".qrcode");
+
+            if (!app && !painel) {
+              return { conectado: false, motivo: "a página ainda não carregou" };
+            }
+            if (!painel && qr) {
+              return { conectado: false, motivo: "o WhatsApp está pedindo QR Code" };
+            }
+            if (!painel) {
+              return { conectado: false, motivo: "não conectado" };
+            }
+            return { conectado: true };
+          },
+        },
+        function (r) {
+          // erro de injeção (aba fechada, página restrita) não pode travar o cartão
+          void (chrome.runtime && chrome.runtime.lastError);
+          var res = r && r[0] && r[0].result;
+          resolve(res || null);
+        }
+      );
     });
   }
 
@@ -217,6 +348,11 @@
 
       var texto = document.createElement("div");
       texto.style.cssText = "flex:1;min-width:0";
+      var dica = p.dica;
+      if (p.id === "wpp" && !feito && estado.wppMotivo) {
+        dica = "Pendente: " + estado.wppMotivo + ".";
+      }
+
       texto.innerHTML =
         '<div style="font-size:14px;color:' +
         (feito ? "#9ca3af" : "#1f2937") +
@@ -226,7 +362,7 @@
         p.titulo +
         "</div>" +
         '<div style="font-size:12px;color:#9ca3af;margin-top:1px">' +
-        p.dica +
+        dica +
         "</div>";
 
       linha.appendChild(marca);
@@ -266,6 +402,17 @@
   }
 
   var ultimoEstado = null;
+
+  // Reavalia quando abas abrem/fecham ou mudam de URL: a etapa do WhatsApp
+  // depende disso e antes só era checada no carregamento.
+  try {
+    chrome.tabs.onUpdated.addListener(function () {
+      setTimeout(atualizarCartao, 800);
+    });
+    chrome.tabs.onRemoved.addListener(function () {
+      setTimeout(atualizarCartao, 400);
+    });
+  } catch (e) {}
 
   function atualizarCartao() {
     if (!soDashboard()) {
