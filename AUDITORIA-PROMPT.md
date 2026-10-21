@@ -351,18 +351,24 @@ mediana de 5 re-renderizações após marcar 1 contato como enviado.
 
 | Contatos | Carga antes | Carga depois | 1 envio antes | 1 envio depois | Nós no DOM antes | Nós depois |
 |---:|---:|---:|---:|---:|---:|---:|
-| 100 | 2,1 ms | 5,5 ms | 0,8 ms | 0,1 ms | 895 | 895 |
-| 500 | 4,2 ms | 6,1 ms | 3,7 ms | 0,2 ms | 4.495 | 1.795 |
-| 1.000 | 11,8 ms | 4,8 ms | 11,0 ms | 0,3 ms | 8.995 | 1.795 |
-| 3.000 | 40,6 ms | 1,9 ms | 41,7 ms | 0,2 ms | 26.995 | 1.795 |
+| 100 | 1,5 ms | 3,4 ms | 0,6 ms | 0,1 ms | 895 | 895 |
+| 500 | 3,9 ms | 4,3 ms | 2,8 ms | 0,1 ms | 4.495 | 1.795 |
+| 1.000 | 8,9 ms | 1,7 ms | 6,9 ms | 0,1 ms | 8.995 | 1.795 |
+| 3.000 | 30,9 ms | 1,5 ms | 33,3 ms | 0,1 ms | 26.995 | 1.795 |
 
-Leitura: o custo por envio era linear no tamanho da lista (41,7 ms em 3.000
+Leitura: o custo por envio era linear no tamanho da lista (33,3 ms em 3.000
 contatos, e cada envio bloqueia a thread principal por esse tempo). Agora é
-praticamente constante (0,2 ms) e o DOM fica em ~1.800 nós em vez de 27 mil.
+praticamente constante (0,1 ms) e o DOM fica em ~1.800 nós em vez de 27 mil.
 
-A carga em 100 contatos aparece maior na versão nova (5,5 ms contra 2,1 ms) por
+O medidor compara com o commit `5bbcd3c`, fixado no código: apontar para `HEAD`
+deixaria de valer assim que as correções fossem commitadas — foi exatamente o
+que aconteceu uma vez, e a medição passou a comparar a versão nova com ela
+mesma. Hoje há uma trava que recusa a cópia "antes" se ela contiver o código
+novo.
+
+A carga em 100 contatos aparece maior na versão nova (3,4 ms contra 1,5 ms) por
 causa do custo fixo de montar a tabela com as colunas de ação e os elementos de
-estado; a partir de 1.000 contatos ela já é menor, e em 3.000 é 21× menor.
+estado; a partir de 1.000 contatos ela já é menor, e em 3.000 é ~20× menor.
 
 A segunda execução do medidor dá números estáveis dentro de ~15% (ruído do
 sandbox). A primeira execução, com o componente frio, é descartada.
