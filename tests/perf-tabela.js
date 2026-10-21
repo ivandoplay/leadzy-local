@@ -6,10 +6,13 @@
  *   node perf-tabela.js            # tabela comparativa
  *   node perf-tabela.js --json     # só o JSON
  *
- * A versão "antes" é a de HEAD (5bbcd3c), que remontava a tabela inteira a
- * cada envio. A versão "depois" é a do workspace, com atualização incremental
- * por linha e paginação de 200 contatos. As duas rodam no mesmo Chromium, com
- * a mesma campanha sintética, para a comparação ser justa.
+ * A versão "antes" é a do commit BASE (5bbcd3c), que remontava a tabela
+ * inteira a cada envio. A versão "depois" é a do workspace, com atualização
+ * incremental por linha e paginação de 200 contatos. As duas rodam no mesmo
+ * Chromium, com a mesma campanha sintética, para a comparação ser justa.
+ *
+ * O commit é fixado de propósito: usar HEAD deixaria de comparar com a versão
+ * antiga assim que as correções fossem commitadas.
  */
 
 const fs = require("fs");
@@ -19,14 +22,24 @@ const { launch, sleep, EXT } = require("./lib/env.js");
 
 const VOLUMES = [100, 500, 1000, 3000];
 const EXT_ANTES = process.env.LZ_EXT_ANTES || path.join(os.tmpdir(), "ext-antes");
+const COMMIT_ANTES = process.env.LZ_COMMIT_ANTES || "5bbcd3c";
 
 /** Cria uma cópia da extensão com a campanhas-ui.js de HEAD, se necessário. */
 function prepararAntes() {
-  if (fs.existsSync(path.join(EXT_ANTES, "js", "campaigns-ui.js"))) return EXT_ANTES;
+  const marcador = path.join(EXT_ANTES, ".commit");
+
+  // reusa só se a cópia for do commit certo
+  if (
+    fs.existsSync(path.join(EXT_ANTES, "js", "campaigns-ui.js")) &&
+    fs.existsSync(marcador) &&
+    fs.readFileSync(marcador, "utf8").trim() === COMMIT_ANTES
+  ) {
+    return EXT_ANTES;
+  }
 
   const { execSync } = require("child_process");
   const repo = path.resolve(__dirname, "..");
-  const antigo = execSync("git show HEAD:extensao/js/campaigns-ui.js", {
+  const antigo = execSync(`git show ${COMMIT_ANTES}:extensao/js/campaigns-ui.js`, {
     cwd: repo,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
@@ -41,6 +54,12 @@ function prepararAntes() {
   );
   if (comPonte === antigo) throw new Error("não achei a ponte na versão antiga");
   fs.writeFileSync(path.join(EXT_ANTES, "js", "campaigns-ui.js"), comPonte);
+  fs.writeFileSync(marcador, COMMIT_ANTES);
+
+  // trava: se a cópia antiga tiver o código novo, a comparação seria falsa
+  if (/LINHAS_POR_PAGINA|linhasPorId/.test(comPonte)) {
+    throw new Error("a cópia 'antes' veio com o código novo — comparação inválida");
+  }
   return EXT_ANTES;
 }
 
