@@ -9,6 +9,9 @@ extensao/_metadata/
 # Artefatos regeneráveis
 leadzy-local.zip
 
+# Entradas de trabalho (prompt de auditoria recebido)
+uploads/
+
 # Sistema
 .DS_Store
 Thumbs.db

@@ -50,6 +50,7 @@ tests/
 
 *.md                documentação de auditoria e decisões
 pmw8x6.zip          pacote original, preservado para o teste diferencial
+leadzy-local.zip    pacote pronto da versão atual (gerado a partir de extensao/)
 ```
 
 ## Testes
